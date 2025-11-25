@@ -1,5 +1,6 @@
 ## 1.0.2
 
+- **HOTFIX:** Renamed podspec file to match package name (fixes "No podspec found" error)
 - Fix readme
 
 ## 1.0.1
