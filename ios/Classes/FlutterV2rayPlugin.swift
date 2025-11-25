@@ -136,8 +136,11 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for startVless.", details: nil))
             return
         }
+        let dnsServers = arguments["dns_servers"] as? [String]
+        
         packetTunnelManager?.remark = remark
         packetTunnelManager?.xrayConfig = configData
+        packetTunnelManager?.dnsServers = dnsServers
         Task {
             do {
                 try await packetTunnelManager?.saveToPreferences()
@@ -198,6 +201,7 @@ final class PacketTunnelManager: ObservableObject {
     var appName: String = "VPN"
     var remark: String = "Xray"
     var xrayConfig: Data = "".data(using: .utf8)!
+    var dnsServers: [String]?
     
     private var cancellables: Set<AnyCancellable> = []
     
@@ -252,14 +256,27 @@ final class PacketTunnelManager: ObservableObject {
         }
         
         do {
-            let manager = self.manager ?? NETunnelProviderManager()
+            // Load ALL existing managers to check if one already exists
+            let allManagers = try await NETunnelProviderManager.loadAllFromPreferences()
+            
+            // Find ANY manager with our providerBundleIdentifier (created by vpn_permission or us)
+            let existingManager = allManagers.first(where: {
+                guard let configuration = $0.protocolConfiguration as? NETunnelProviderProtocol else {
+                    return false
+                }
+                return configuration.providerBundleIdentifier == providerBundleIdentifier
+            })
+            
+            // Reuse existing manager (from vpn_permission) or create new one
+            let manager = existingManager ?? self.manager ?? NETunnelProviderManager()
             manager.localizedDescription = appName
             manager.protocolConfiguration = {
                 let configuration = NETunnelProviderProtocol()
                 configuration.providerBundleIdentifier = providerBundleIdentifier
                 configuration.serverAddress = "Xray"
                 configuration.providerConfiguration = [
-                    "xrayConfig": xrayConfig
+                    "xrayConfig": xrayConfig,
+                    "dnsServers": dnsServers ?? []
                 ]
                 if #available(iOS 14.2, *) {
                     configuration.excludeLocalNetworks = true
@@ -273,7 +290,7 @@ final class PacketTunnelManager: ObservableObject {
             
             await self.reload()
         } catch {
-            print("Error saving VPN preferences: \(error.localizedDescription)")
+            print("Error saving VPN preferences: \\(error.localizedDescription)")
             throw error
         }
     }

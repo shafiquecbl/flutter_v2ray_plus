@@ -1,3 +1,14 @@
+
+## 1.0.8
+
+- **iOS:** Fixed duplicate VPN entries when using with vpn_permission package
+- **iOS:** Now reuses existing VPN manager created by vpn_permission instead of creating new one
+- **iOS:** Results in single VPN entry in iOS Settings
+- **iOS:** Custom DNS servers can be passed to enable ad-blocking (e.g., AdGuard DNS)
+- **iOS:** Falls back to default DNS [\"8.8.8.8\", \"114.114.114.114\"] if null
+- **Feature:** Added configurable DNS servers support
+- **Example:** Support for ad-blocking, tracker blocking, and family protection via DNS
+
 ## 1.0.7
 
 - **iOS:** Fixed "Manager not found" error on first connection

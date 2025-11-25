@@ -70,11 +70,20 @@ class FlutterV2ray {
   ///   If it is true, only the FlutterVless proxy will be executed,
   ///
   ///   and the VPN tunnel will not be executed.
+  ///
+  /// dnsServers:
+  ///
+  ///   Custom DNS servers for the VPN tunnel.
+  ///
+  ///   If null, defaults to ["8.8.8.8", "114.114.114.114"].
+  ///
+  ///   Example: ["94.140.14.14", "94.140.15.15"] for AdGuard DNS (ad-blocking)
   Future<void> startVless({
     required String remark,
     required String config,
     List<String>? blockedApps,
     List<String>? bypassSubnets,
+    List<String>? dnsServers,
     bool proxyOnly = false,
     String notificationDisconnectButtonName = "DISCONNECT",
   }) async {
@@ -92,6 +101,7 @@ class FlutterV2ray {
       blockedApps: blockedApps,
       proxyOnly: proxyOnly,
       bypassSubnets: bypassSubnets,
+      dnsServers: dnsServers,
       notificationDisconnectButtonName: notificationDisconnectButtonName,
     );
   }

@@ -83,6 +83,7 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
                 config.V2RAY_FULL_JSON_CONFIG = call.argument("config") ?: ""
                 config.BLOCKED_APPS = call.argument<ArrayList<String>>("blocked_apps") ?: ArrayList()
                 config.BYPASS_SUBNETS = call.argument<ArrayList<String>>("bypass_subnets") ?: ArrayList()
+                config.DNS_SERVERS = call.argument<ArrayList<String>>("dns_servers")
                 config.NOTIFICATION_DISCONNECT_BUTTON_NAME = call.argument("notificationDisconnectButtonName") ?: "Disconnect"
                 
                 // 2. Handle custom notification icon if set via initializeVless

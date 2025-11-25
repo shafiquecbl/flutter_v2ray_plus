@@ -64,5 +64,8 @@ data class XrayConfig(
     var DOMAIN_STRATEGY: String = "",
     
     /** Routing domain strategy. */
-    var ROUTING_DOMAIN_STRATEGY: String = ""
+    var ROUTING_DOMAIN_STRATEGY: String = "",
+    
+    /** Custom DNS servers for VPN (nullable, defaults to ["8.8.8.8", "1.1.1.1"] if null). */
+    var DNS_SERVERS: ArrayList<String>? = null
 ) : Serializable

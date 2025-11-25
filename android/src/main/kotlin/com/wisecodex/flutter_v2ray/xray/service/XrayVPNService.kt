@@ -149,12 +149,16 @@ class XrayVPNService : VpnService() {
                 builder.addRoute("0.0.0.0", 0)
             }
 
-            // Add DNS servers
+            // Add DNS servers from config or use defaults
             try {
+                val dnsServers = config.DNS_SERVERS ?: arrayListOf("8.8.8.8", "114.114.114.114")
+                for (dns in dnsServers) {
+                    builder.addDnsServer(dns)
+                }
+            } catch (e: Exception) {
+                // Fallback to defaults if error
                 builder.addDnsServer("8.8.8.8")
                 builder.addDnsServer("1.1.1.1")
-            } catch (e: Exception) {
-                // ignore
             }
 
             // Establish the VPN interface

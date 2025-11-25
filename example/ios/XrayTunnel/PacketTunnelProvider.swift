@@ -28,6 +28,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             fatalError()
         }
         
+        // Get DNS servers from configuration, or use default
+        let dnsServers = providerConfiguration["dnsServers"] as? [String] ?? ["8.8.8.8", "114.114.114.114"]
+        
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "254.1.1.1")
         settings.mtu = 9000
         settings.ipv4Settings = {
@@ -40,7 +43,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             settings.includedRoutes = [NEIPv6Route.default()]
             return settings
         }()
-        settings.dnsSettings = NEDNSSettings(servers: ["8.8.8.8", "114.114.114.114"])
+        settings.dnsSettings = NEDNSSettings(servers: dnsServers)
         try await self.setTunnelNetworkSettings(settings)
         self.startXRay(xrayConfig: xrayConfig)
         self.startSocks5Tunnel(serverPort: tunport)
