@@ -29,7 +29,7 @@
 
 - Supports iOS and Android out of the box, with routing and similar features available
 - **Supports Android 16KB page size (API 35+)**
-- Run flutter_v2ray_plus_plus as a local proxy or using the VPN mode (Network Extension / VpnService).
+- Run flutter_v2ray_plus as a local proxy or using the VPN mode (Network Extension / VpnService).
 - Parse VLESS/VMESS share links and generate ready-to-run configurations.
 - Measure server delay (ping) for a configuration.
 - Edit configuration (ports, DNS, routing, etc.).
@@ -40,9 +40,9 @@
 
 1. Install the package (see [Installation](#installation)).
 2. Complete platform setup (iOS / Android).
-3. Initialize the plugin and start flutter_v2ray_plus_plus from your app.
+3. Initialize the plugin and start flutter_v2ray_plus from your app.
 
-- [Simple vless client written in flutter](https://github.com/shafiquecbl/flutter_v2ray_plus_plus/blob/master/example/lib/main.dart)
+- [Simple vless client written in flutter](https://github.com/shafiquecbl/flutter_v2ray_plus/blob/master/example/lib/main.dart)
 
 Minimal copy‑paste example:
 

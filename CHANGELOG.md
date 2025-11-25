@@ -1,3 +1,7 @@
+## 1.0.2
+
+- Fix readme
+
 ## 1.0.1
 
 - **iOS:** XRay.xcframework now downloads automatically via CocoaPods from GitHub Releases
