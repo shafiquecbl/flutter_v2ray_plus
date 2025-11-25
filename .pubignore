@@ -1,0 +1,14 @@
+# Exclude the XRay.xcframework from pub.dev package
+# It will be downloaded automatically from GitHub Releases via CocoaPods
+ios/XRay.xcframework/
+ios/XRay.xcframework.zip
+
+# Exclude example app's build artifacts and dependencies
+example/.dart_tool/
+example/.flutter-plugins
+example/.flutter-plugins-dependencies
+example/build/
+example/ios/Pods/
+example/ios/.symlinks/
+example/android/.gradle/
+example/android/app/build/
