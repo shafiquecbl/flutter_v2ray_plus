@@ -1,18 +1,26 @@
 #
 # To learn more about a Podspec see http://guides.cocoapods.org/syntax/podspec.html.
-# Run `pod lib lint flutter_v2ray.podspec` to validate before publishing.
+# Run `pod lib lint flutter_v2ray_plus.podspec` to validate before publishing.
 #
 Pod::Spec.new do |s|
-  s.name             = 'flutter_v2ray'
-  s.version          = '0.0.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.name             = 'flutter_v2ray_plus'
+  s.version          = '1.0.0'
+  s.summary          = 'Flutter plugin to run VLESS/VMESS as a local proxy and VPN on Android and iOS.'
   s.description      = <<-DESC
-A new Flutter plugin project.
+Flutter plugin to run VLESS/VMESS as a local proxy and VPN on Android and iOS.
+V2Ray/Xray core with Shadowsocks, Trojan, and Socks 5 support.
+The XRay.xcframework is automatically downloaded from GitHub Releases during pod install.
                        DESC
-  s.homepage         = 'http://wisecodex.com'
+  s.homepage         = 'https://github.com/shafiquecbl/flutter_v2ray_plus'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'WiseCodeX' => 'wisecodexinfo@gmail.com' }
-  s.source           = { :path => '.' }
+  s.author           = { 'Shafique' => 'wisecodexinfo@gmail.com' }
+  
+  # Download XRay.xcframework from GitHub Releases
+  s.source           = { 
+    :http => 'https://github.com/shafiquecbl/flutter_v2ray_plus/releases/download/framework-v1.0.0/XRay.xcframework.zip',
+    :sha256 => 'ab14d797a3efe5cd148054e7bd1923d95b355cee9b0a36e5a81782c6fd517d1a'
+  }
+  
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
   s.platform = :ios, '11.0'

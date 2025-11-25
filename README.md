@@ -1,4 +1,4 @@
-# flutter_v2ray
+# flutter_v2ray_plus_plus
 
 **Flutter plugin to run VLESS/VMESS as a local proxy and VPN on Android and iOS. V2Ray/Xray core. Shadowsocks, Trojan, Socks 5 support.**
 
@@ -29,7 +29,7 @@
 
 - Supports iOS and Android out of the box, with routing and similar features available
 - **Supports Android 16KB page size (API 35+)**
-- Run flutter_vless as a local proxy or using the VPN mode (Network Extension / VpnService).
+- Run flutter_v2ray_plus_plus as a local proxy or using the VPN mode (Network Extension / VpnService).
 - Parse VLESS/VMESS share links and generate ready-to-run configurations.
 - Measure server delay (ping) for a configuration.
 - Edit configuration (ports, DNS, routing, etc.).
@@ -40,15 +40,15 @@
 
 1. Install the package (see [Installation](#installation)).
 2. Complete platform setup (iOS / Android).
-3. Initialize the plugin and start flutter_v2ray from your app.
+3. Initialize the plugin and start flutter_v2ray_plus_plus from your app.
 
-- [Simple vless client written in flutter](https://github.com/shafiquecbl/flutter_v2ray/blob/master/example/lib/main.dart)
+- [Simple vless client written in flutter](https://github.com/shafiquecbl/flutter_v2ray_plus_plus/blob/master/example/lib/main.dart)
 
 Minimal copy‑paste example:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:flutter_v2ray_plus/flutter_v2ray_plus.dart';
 
 void main() => runApp(const MyApp());
 
@@ -118,15 +118,15 @@ class _MyAppState extends State<MyApp> {
 
 ```yaml
 dependencies:
-  flutter_vless: replace_with_current_plugin_version
+  flutter_v2ray_plus: replace_with_current_plugin_version
 ```
 
 ### Local development
 
 ```yaml
 dependencies:
-  flutter_vless:
-    path: ../flutter_v2ray
+  flutter_v2ray_plus:
+    path: ../flutter_v2ray_plus
 ```
 
 Then run:
@@ -140,6 +140,8 @@ flutter pub get
 Follow the platform steps below — without these the plugin cannot run VPN/Network Extension.
 
 ### iOS
+
+The XRay.xcframework (required for iOS) is automatically downloaded during `pod install` — no manual download needed.
 
 [Setup for IOS](./IOS_SETUP.md)
 
@@ -169,7 +171,7 @@ Follow the platform steps below — without these the plugin cannot run VPN/Netw
 ### URL parser
 
 ```dart
-import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:flutter_v2ray_plus/flutter_v2ray_plus.dart';
 
 final String link = 'vmess://...'; // or vless://, trojan:// etc.
 FlutterV2RayURL parsed = FlutterV2ray.parseFromURL(link);
