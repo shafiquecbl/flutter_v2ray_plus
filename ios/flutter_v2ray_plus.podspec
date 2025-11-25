@@ -14,16 +14,33 @@ The XRay.xcframework is automatically downloaded from GitHub Releases during pod
   s.homepage         = 'https://github.com/shafiquecbl/flutter_v2ray_plus'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Shafique' => 'wisecodexinfo@gmail.com' }
-  
-  # Download XRay.xcframework from GitHub Releases
-  s.source           = { 
-    :http => 'https://github.com/shafiquecbl/flutter_v2ray_plus/releases/download/framework-v1.0.0/XRay.xcframework.zip',
-    :sha256 => 'ab14d797a3efe5cd148054e7bd1923d95b355cee9b0a36e5a81782c6fd517d1a'
-  }
+  s.source           = { :path => '.' }
   
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
   s.platform = :ios, '11.0'
+
+  # Download XRay.xcframework from GitHub Releases during pod install
+  s.prepare_command = <<-CMD
+    set -e
+    FRAMEWORK_URL="https://github.com/shafiquecbl/flutter_v2ray_plus/releases/download/framework-v1.0.0/XRay.xcframework.zip"
+    FRAMEWORK_SHA256="ab14d797a3efe5cd148054e7bd1923d95b355cee9b0a36e5a81782c6fd517d1a"
+    
+    if [ ! -d "XRay.xcframework" ]; then
+      echo "Downloading XRay.xcframework from GitHub Releases..."
+      curl -L -o XRay.xcframework.zip "$FRAMEWORK_URL"
+      
+      echo "Verifying SHA256 checksum..."
+      echo "$FRAMEWORK_SHA256  XRay.xcframework.zip" | shasum -a 256 -c -
+      
+      echo "Extracting XRay.xcframework..."
+      unzip -q XRay.xcframework.zip
+      rm XRay.xcframework.zip
+      echo "XRay.xcframework downloaded and extracted successfully!"
+    else
+      echo "XRay.xcframework already exists, skipping download."
+    fi
+  CMD
 
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }

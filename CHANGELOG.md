@@ -1,3 +1,8 @@
+## 1.0.5
+
+- **HOTFIX:** Fixed iOS framework download using prepare_command in podspec
+- Framework now downloads correctly during pod install from GitHub Releases
+
 ## 1.0.4
 
 - **HOTFIX:** Fixed Android plugin class name mismatch (fixes "cannot find symbol" error)
