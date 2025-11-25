@@ -1,3 +1,10 @@
+## 1.0.7
+
+- **iOS:** Fixed "Manager not found" error on first connection
+- **iOS:** Fixed multiple VPN entries in iOS settings (now shows single entry with app name)
+- **iOS:** Use app name instead of server config for VPN configuration display name
+- **iOS:** Reload manager after save to ensure it's ready before starting connection
+
 ## 1.0.6
 
 - **HOTFIX:** Fixed iOS plugin class name mismatch (fixes "Unknown receiver 'FlutterV2rayPlugin'" error)

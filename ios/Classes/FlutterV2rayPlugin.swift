@@ -7,6 +7,7 @@ import XRay
 public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private var packetTunnelManager: PacketTunnelManager? = nil
+    private var appName: String = "VPN"
     
     private var timer: Timer?
     private var eventSink: FlutterEventSink?
@@ -174,7 +175,15 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for initializeVless.", details: nil))
             return
         }
-        self.packetTunnelManager = PacketTunnelManager(providerBundleIdentifier: "\(providerBundleIdentifier).XrayTunnel", groupIdentifier: groupIdentifier)
+        if let customAppName = arguments["appName"] as? String {
+            self.appName = customAppName
+        } else if let displayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String {
+            self.appName = displayName
+        } else if let bundleName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String {
+            self.appName = bundleName
+        }
+        
+        self.packetTunnelManager = PacketTunnelManager(providerBundleIdentifier: "\(providerBundleIdentifier).XrayTunnel", groupIdentifier: groupIdentifier, appName: appName)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if self.packetTunnelManager?.connectedDate != nil{
                 self.startTimer()
@@ -186,6 +195,7 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 final class PacketTunnelManager: ObservableObject {
     var providerBundleIdentifier: String?
     var groupIdentifier: String?
+    var appName: String = "VPN"
     var remark: String = "Xray"
     var xrayConfig: Data = "".data(using: .utf8)!
     
@@ -203,9 +213,10 @@ final class PacketTunnelManager: ObservableObject {
         manager.flatMap { $0.connection.connectedDate }
     }
     
-    init(providerBundleIdentifier: String, groupIdentifier: String) {
+    init(providerBundleIdentifier: String, groupIdentifier: String, appName: String = "VPN") {
         self.providerBundleIdentifier = providerBundleIdentifier
         self.groupIdentifier = groupIdentifier
+        self.appName = appName
         isProcessing = true
         Task(priority: .userInitiated) {
             await self.reload()
@@ -242,7 +253,7 @@ final class PacketTunnelManager: ObservableObject {
         
         do {
             let manager = self.manager ?? NETunnelProviderManager()
-            manager.localizedDescription = remark
+            manager.localizedDescription = appName
             manager.protocolConfiguration = {
                 let configuration = NETunnelProviderProtocol()
                 configuration.providerBundleIdentifier = providerBundleIdentifier
@@ -259,6 +270,8 @@ final class PacketTunnelManager: ObservableObject {
             }()
             manager.isEnabled = true
             try await manager.saveToPreferences()
+            
+            await self.reload()
         } catch {
             print("Error saving VPN preferences: \(error.localizedDescription)")
             throw error
