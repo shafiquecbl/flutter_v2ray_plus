@@ -1,3 +1,10 @@
+## 1.0.1
+
+- **iOS:** XRay.xcframework now downloads automatically via CocoaPods from GitHub Releases
+- **iOS:** No manual framework download required - streamlined installation process
+- **iOS:** Added SHA256 verification for framework integrity
+- Updated iOS setup documentation
+
 ## 1.0.0
 
 - Initial release
