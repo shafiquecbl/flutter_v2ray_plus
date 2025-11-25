@@ -4,7 +4,7 @@ import NetworkExtension
 import Combine
 import XRay
 
-public class FlutterVlessPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
+public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private var packetTunnelManager: PacketTunnelManager? = nil
     
@@ -17,7 +17,7 @@ public class FlutterVlessPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "flutter_v2ray", binaryMessenger: registrar.messenger())
-        let instance = FlutterVlessPlugin()
+        let instance = FlutterV2rayPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
         let eventChannel = FlutterEventChannel(name: "flutter_v2ray/status", binaryMessenger: registrar.messenger())
         eventChannel.setStreamHandler(instance)

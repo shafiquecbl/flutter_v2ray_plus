@@ -35,7 +35,7 @@ pod install
 - Open the Runner project and go to the Package Dependencies tab.
 - Add https://github.com/EbrahimTahernejad/Tun2SocksKit to the XrayTunnel Target.
 - Open the **General** tab of the **XrayTunnel** Target.
-- **XRay.xcframework** will be automatically added via CocoaPods (no manual action needed).
+- Add **XRay.xcframework** to Frameworks and Libraries.
 - Add **libresolv.tbd** to Frameworks and Libraries.
 
 > **Note**: The XRay.xcframework is automatically downloaded from GitHub Releases during `pod install`. You don't need to download it manually.
@@ -49,10 +49,10 @@ pod install
 
 ## flutter
 
-Pass the providerBundleIdentifier and groupIdentifier to the initializeVless function:
+Pass the providerBundleIdentifier and groupIdentifier to the initializeV2ray function:
 
 ```dart
-await flutterVless.initializeVless(
+await flutterV2ray.initializeV2ray(
     providerBundleIdentifier: "IOS Provider bundle indentifier",
     groupIdentifier: "IOS Group Identifier",
 );
