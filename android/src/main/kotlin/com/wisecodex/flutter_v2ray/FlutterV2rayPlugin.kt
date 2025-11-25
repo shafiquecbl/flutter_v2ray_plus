@@ -28,7 +28,7 @@ import java.util.ArrayList
 import java.util.concurrent.Executors
 
 /**
- * Main entry point for the Flutter Vless plugin on Android.
+ * Main entry point for the Flutter V2ray plugin on Android.
  * 
  * This class handles communication between Flutter (Dart) and Android (Kotlin) using MethodChannels.
  * It is responsible for:
@@ -37,7 +37,7 @@ import java.util.concurrent.Executors
  * 3. Starting the [XrayVPNService] to run the VPN or Proxy.
  * 4. Sending status updates and traffic statistics back to Flutter via EventChannel.
  */
-class FlutterVlessPlugin : FlutterPlugin, ActivityAware, PluginRegistry.ActivityResultListener, MethodChannel.MethodCallHandler {
+class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.ActivityResultListener, MethodChannel.MethodCallHandler {
 
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var vpnControlMethod: MethodChannel
@@ -154,7 +154,7 @@ class FlutterVlessPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
             }
             "getServerDelay" -> {
                 // Measures delay (ping) to a target URL using a specific config (without connecting)
-                android.util.Log.d("FlutterVlessPlugin", "getServerDelay called")
+                android.util.Log.d("FlutterV2rayPlugin", "getServerDelay called")
                 val configJson = call.argument<String>("config")
                 val url = call.argument<String>("url") ?: "https://www.google.com"
                 

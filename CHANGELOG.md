@@ -1,3 +1,7 @@
+## 1.0.4
+
+- **HOTFIX:** Fixed Android plugin class name mismatch (fixes "cannot find symbol" error)
+
 ## 1.0.2
 
 - **HOTFIX:** Renamed podspec file to match package name (fixes "No podspec found" error)
