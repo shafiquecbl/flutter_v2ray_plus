@@ -1,3 +1,8 @@
+## 1.0.9
+
+- **Legal:** Added proper attribution to original flutter_vless package by XIIIFOX
+- **Legal:** Updated LICENSE, README, and pubspec.yaml to comply with MIT license requirements
+- **Documentation:** Clarified the relationship with the original package and listed modifications
 
 ## 1.0.8
 

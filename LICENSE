@@ -1,6 +1,18 @@
 MIT License
 
-Copyright (c) 2025 Shafique
+================================================================================
+ORIGINAL WORK:
+Copyright (c) 2024 XIIIFOX (flutter_vless)
+https://github.com/XIIIFOX/flutter_vless
+
+MODIFICATIONS AND ADDITIONS:
+Copyright (c) 2025 Shafique (flutter_v2ray_plus)
+https://github.com/shafiquecbl/flutter_v2ray_plus
+================================================================================
+
+This package is based on and derived from flutter_vless by XIIIFOX.
+Modifications include iOS framework distribution automation, DNS configuration,
+bug fixes, and additional features.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
