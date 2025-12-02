@@ -8,82 +8,119 @@
 import NetworkExtension
 import XRay
 import Tun2SocksKit
-import os
+import os.log
 
+/// Custom error types for better error handling
+enum TunnelError: Error {
+    case invalidConfiguration
+    case missingXRayConfig
+    case invalidPort
+}
+
+/// Packet Tunnel Provider for XRay VPN
 class PacketTunnelProvider: NEPacketTunnelProvider {
     
-    private let logger = CustomXRayLogger()
+    // MARK: - Properties
     
-    override func startTunnel(options: [String : NSObject]? = nil) async throws {
-        guard
-            let protocolConfiguration = protocolConfiguration as? NETunnelProviderProtocol,
-            let providerConfiguration = protocolConfiguration.providerConfiguration
-        else {
-            fatalError()
-        }
-        guard let xrayConfig: Data = providerConfiguration["xrayConfig"] as? Data else {
-            fatalError()
-        }
-        guard let tunport: Int = parseConfig(jsonData: xrayConfig) else {
-            fatalError()
-        }
+    private let logger = CustomXRayLogger()
+    private static let defaultDNSServers = ["8.8.8.8", "114.114.114.114"]
+    
+    // MARK: - Lifecycle Methods
+    
+    override func startTunnel(options: [String: NSObject]? = nil) async throws {
+        let config = try extractConfiguration()
+        let port = try extractTunnelPort(from: config.xrayConfig)
+        let settings = createNetworkSettings(dnsServers: config.dnsServers)
         
-        // Get DNS servers from configuration, or use default
-        let dnsServers = providerConfiguration["dnsServers"] as? [String] ?? ["8.8.8.8", "114.114.114.114"]
-        
-        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "254.1.1.1")
-        settings.mtu = 9000
-        settings.ipv4Settings = {
-            let settings = NEIPv4Settings(addresses: ["198.18.0.1"], subnetMasks: ["255.255.0.0"])
-            settings.includedRoutes = [NEIPv4Route.default()]
-            return settings
-        }()
-        settings.ipv6Settings = {
-            let settings = NEIPv6Settings(addresses: ["fd6e:a81b:704f:1211::1"], networkPrefixLengths: [64])
-            settings.includedRoutes = [NEIPv6Route.default()]
-            return settings
-        }()
-        settings.dnsSettings = NEDNSSettings(servers: dnsServers)
-        try await self.setTunnelNetworkSettings(settings)
-        self.startXRay(xrayConfig: xrayConfig)
-        self.startSocks5Tunnel(serverPort: tunport)
-        
+        try await setTunnelNetworkSettings(settings)
+        startXRay(xrayConfig: config.xrayConfig)
+        startSocks5Tunnel(serverPort: port)
     }
+    
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         stopXRay()
         Socks5Tunnel.quit()
-        
         completionHandler()
     }
     
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        if let message = String(data: messageData, encoding: .utf8) {
-            if (message == "xray_traffic"){
-                completionHandler?("\(Socks5Tunnel.stats.up.bytes),\(Socks5Tunnel.stats.down.bytes)".data(using: .utf8))
-            }else if (message.hasPrefix("xray_delay")){
-                var error: NSError?
-                var delay: Int64 = -1
-                let url = String(message[message.index(message.startIndex, offsetBy: 10)...])
-                XRayMeasureDelay(url, &delay, &error)
-                completionHandler?("\(delay)".data(using: .utf8))
-            }
-            else{
-                completionHandler?(messageData)
-            }
-            
-        }else{
+        guard let message = String(data: messageData, encoding: .utf8) else {
+            completionHandler?(messageData)
+            return
+        }
+        
+        switch message {
+        case "xray_traffic":
+            handleTrafficRequest(completionHandler)
+        case let msg where msg.hasPrefix("xray_delay"):
+            handleDelayRequest(message: msg, completionHandler)
+        default:
             completionHandler?(messageData)
         }
     }
     
     override func sleep(completionHandler: @escaping () -> Void) {
-        // Add code here to get ready to sleep.
         completionHandler()
     }
     
     override func wake() {
-        // Add code here to wake up.
+        // Reserved for future implementation
     }
+    
+    // MARK: - Configuration Methods
+    
+    private func extractConfiguration() throws -> (xrayConfig: Data, dnsServers: [String]) {
+        guard let protocolConfig = protocolConfiguration as? NETunnelProviderProtocol,
+              let providerConfig = protocolConfig.providerConfiguration else {
+            throw TunnelError.invalidConfiguration
+        }
+        
+        guard let xrayConfig = providerConfig["xrayConfig"] as? Data else {
+            throw TunnelError.missingXRayConfig
+        }
+        
+        let dnsServers = providerConfig["dnsServers"] as? [String] ?? Self.defaultDNSServers
+        return (xrayConfig, dnsServers)
+    }
+    
+    private func createNetworkSettings(dnsServers: [String]) -> NEPacketTunnelNetworkSettings {
+        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "254.1.1.1")
+        settings.mtu = 9000
+        settings.ipv4Settings = createIPv4Settings()
+        settings.ipv6Settings = createIPv6Settings()
+        settings.dnsSettings = NEDNSSettings(servers: dnsServers)
+        return settings
+    }
+    
+    private func createIPv4Settings() -> NEIPv4Settings {
+        let settings = NEIPv4Settings(addresses: ["198.18.0.1"], subnetMasks: ["255.255.0.0"])
+        settings.includedRoutes = [NEIPv4Route.default()]
+        return settings
+    }
+    
+    private func createIPv6Settings() -> NEIPv6Settings {
+        let settings = NEIPv6Settings(addresses: ["fd6e:a81b:704f:1211::1"], networkPrefixLengths: [64])
+        settings.includedRoutes = [NEIPv6Route.default()]
+        return settings
+    }
+    
+    // MARK: - Message Handlers
+    
+    private func handleTrafficRequest(_ completionHandler: ((Data?) -> Void)?) {
+        let stats = "\(Socks5Tunnel.stats.up.bytes),\(Socks5Tunnel.stats.down.bytes)"
+        completionHandler?(stats.data(using: .utf8))
+    }
+    
+    private func handleDelayRequest(message: String, _ completionHandler: ((Data?) -> Void)?) {
+        let url = String(message.dropFirst(10))
+        var delay: Int64 = -1
+        var error: NSError?
+        
+        XRayMeasureDelay(url, &delay, &error)
+        completionHandler?("\(delay)".data(using: .utf8))
+    }
+    
+    // MARK: - Socks5 Tunnel
     
     private func startSocks5Tunnel(serverPort port: Int) {
         let config = """
@@ -101,62 +138,61 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
           log-level: debug
           limit-nofile: 65535
         """
+        
         DispatchQueue.global(qos: .userInitiated).async {
-            NSLog("HEV_SOCKS5_TUNNEL_MAIN: \(Socks5Tunnel.run(withConfig: .string(content: config)))")
+            let result = Socks5Tunnel.run(withConfig: .string(content: config))
+            os_log("Socks5 tunnel exited with code: %d", type: .info, result)
         }
     }
     
+    // MARK: - XRay Management
+    
     private func startXRay(xrayConfig: Data) {
-        // TODO: Set memory limit
         XRaySetMemoryLimit()
         
-        // Create an error pointer
         var error: NSError?
-        
-        // Start XRay with the config data
         let started = XRayStart(xrayConfig, logger, &error)
         
         if started {
-            print("XRay started successfully")
+            os_log("XRay started successfully", type: .info)
         } else if let error = error {
-            print("Failed to start XRay: \(error.localizedDescription)")
+            os_log("Failed to start XRay: %{public}@", type: .error, error.localizedDescription)
         }
     }
     
     private func stopXRay() {
         XRayStop()
-        print("XRay stopped " + XRayGetVersion())
+        os_log("XRay stopped (version: %{public}@)", type: .info, XRayGetVersion())
     }
     
-    private func parseConfig(jsonData: Data) -> Int? {
+    private func extractTunnelPort(from jsonData: Data) throws -> Int {
         do {
-            if let configJSON = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any],
-               let inbounds = configJSON["inbounds"] as? [[String: Any]] {
-                for inbound in inbounds {
-                    if let protocolType = inbound["protocol"] as? String, let port = inbound["port"] as? Int {
-                        switch protocolType {
-                        case "socks":
-                            return port
-                        case "http":
-                            return port
-                        default:
-                            break
-                        }
-                    }
+            guard let config = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                  let inbounds = config["inbounds"] as? [[String: Any]] else {
+                throw TunnelError.invalidConfiguration
+            }
+            
+            for inbound in inbounds {
+                if let protocolType = inbound["protocol"] as? String,
+                   let port = inbound["port"] as? Int,
+                   ["socks", "http"].contains(protocolType) {
+                    return port
                 }
             }
         } catch {
-            print("Failed to parse JSON: \(error)")
+            os_log("Failed to parse XRay config: %{public}@", type: .error, error.localizedDescription)
+            throw TunnelError.invalidConfiguration
         }
-        return nil;
+        
+        throw TunnelError.invalidPort
     }
 }
 
+// MARK: - Custom Logger
 
-class CustomXRayLogger: NSObject, XRayLoggerProtocol {
-    func logInput(_ s: String?) {
-        if let logMessage = s {
-            print("XRay Log: \(logMessage)")
-        }
+final class CustomXRayLogger: NSObject, XRayLoggerProtocol {
+    func logInput(_ message: String?) {
+        guard let message = message else { return }
+        os_log("XRay: %{public}@", type: .debug, message)
     }
 }
