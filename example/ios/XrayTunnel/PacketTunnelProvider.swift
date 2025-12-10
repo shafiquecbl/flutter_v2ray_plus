@@ -27,14 +27,40 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     
     // MARK: - Lifecycle Methods
     
-    override func startTunnel(options: [String: NSObject]? = nil) async throws {
-        let config = try extractConfiguration()
-        let port = try extractTunnelPort(from: config.xrayConfig)
-        let settings = createNetworkSettings(dnsServers: config.dnsServers)
-        
-        try await setTunnelNetworkSettings(settings)
-        startXRay(xrayConfig: config.xrayConfig)
-        startSocks5Tunnel(serverPort: port)
+    override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        do {
+            let config = try extractConfiguration()
+            let port = try extractTunnelPort(from: config.xrayConfig)
+            let settings = createNetworkSettings(dnsServers: config.dnsServers)
+            
+            // CRITICAL: Must set network settings BEFORE starting Xray and tun2socks
+            // Otherwise traffic is intercepted but not properly routed
+            setTunnelNetworkSettings(settings) { [weak self] error in
+                guard let self = self else {
+                    completionHandler(TunnelError.invalidConfiguration)
+                    return
+                }
+                
+                if let error = error {
+                    os_log("Failed to set tunnel network settings: %{public}@", type: .error, error.localizedDescription)
+                    completionHandler(error)
+                    return
+                }
+                
+                // Network settings established - now start Xray and tun2socks
+                self.startXRay(xrayConfig: config.xrayConfig)
+                
+                // Small delay to ensure Xray SOCKS server is ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.startSocks5Tunnel(serverPort: port)
+                    os_log("Tunnel started successfully", type: .info)
+                    completionHandler(nil)
+                }
+            }
+        } catch {
+            os_log("Failed to start tunnel: %{public}@", type: .error, error.localizedDescription)
+            completionHandler(error)
+        }
     }
     
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {

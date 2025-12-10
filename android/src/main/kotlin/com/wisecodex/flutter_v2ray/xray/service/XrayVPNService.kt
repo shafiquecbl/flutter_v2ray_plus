@@ -10,285 +10,340 @@ import android.util.Log
 import com.wisecodex.flutter_v2ray.xray.core.XrayCoreManager
 import com.wisecodex.flutter_v2ray.xray.dto.XrayConfig
 import com.wisecodex.flutter_v2ray.xray.utils.AppConfigs
-import org.json.JSONObject
 import java.io.File
-import java.io.FileDescriptor
-import java.util.ArrayList
 
 /**
- * Android VPN Service implementation.
- * 
- * This service is responsible for:
- * 1. Establishing the VPN interface (TUN device) using Android's VpnService API.
- * 2. Managing the `tun2socks` process, which routes traffic from the TUN device to the SOCKS proxy.
- * 3. Handling the lifecycle of the VPN connection (start, stop, cleanup).
- * 4. Supporting "Proxy Only" mode where VPN is skipped.
- * 
- * Key Technical Detail:
- * To support Android 15 (16KB page size) and avoid "bad file descriptor" errors, we use a custom
- * mechanism to pass the TUN file descriptor to `tun2socks`. Instead of passing it via command line
- * (which fails across process boundaries), we send it over a Unix Domain Socket.
+ * Android VPN Service implementation for XRay VPN.
+ *
+ * Responsibilities:
+ * - Establishing the VPN interface (TUN device) using Android's VpnService API
+ * - Managing the tun2socks process for traffic routing
+ * - Handling VPN connection lifecycle (start, stop, cleanup)
+ * - Supporting "Proxy Only" mode without VPN interface
+ *
+ * ## Technical Implementation
+ * To support Android 15 (16KB page size) and prevent "bad file descriptor" errors,
+ * the TUN file descriptor is passed to tun2socks via Unix Domain Socket instead of
+ * command line arguments which fail across process boundaries.
  */
 class XrayVPNService : VpnService() {
 
-    private var mInterface: ParcelFileDescriptor? = null
+    // MARK: - Properties
+
+    private var vpnInterface: ParcelFileDescriptor? = null
     private var tun2socksProcess: Process? = null
     private var isRunning = false
 
-    override fun onCreate() {
-        super.onCreate()
-    }
+    // MARK: - Lifecycle Methods
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        intent ?: return START_NOT_STICKY.also { stopSelf() }
 
-        // Create notification channel and start foreground immediately to prevent crash
-        createNotificationChannel()
-        val notification = createNotification("VPN Service Running")
-        try {
-            if (Build.VERSION.SDK_INT >= 34) {
-                // For Android 14+, specify the foreground service type
-                // Use a constant value if the symbol is not available in compile SDK
-                // FOREGROUND_SERVICE_TYPE_SPECIAL_USE = 32
-                startForeground(1, notification, 32) 
-            } else {
-                startForeground(1, notification)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start foreground", e)
-        }
+        startForegroundService()
 
-        // 1. Parse the command (START or STOP)
-        val command = if (Build.VERSION.SDK_INT >= 33) {
-            intent.getSerializableExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getSerializableExtra("COMMAND") as? AppConfigs.V2RAY_SERVICE_COMMANDS
-        }
-
-        if (command == AppConfigs.V2RAY_SERVICE_COMMANDS.START_SERVICE) {
-            val config = if (Build.VERSION.SDK_INT >= 33) {
-                intent.getSerializableExtra("V2RAY_CONFIG", XrayConfig::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getSerializableExtra("V2RAY_CONFIG") as? XrayConfig
-            }
-
-            if (config != null) {
-                // Ensure clean state before starting
-                cleanup()
-                
-                // Check if we should run in Proxy Only mode (no VPN interface)
-                val proxyOnly = intent.getBooleanExtra("PROXY_ONLY", false)
-                
-                // Start the Xray Core (SOCKS/HTTP proxy)
-                if (XrayCoreManager.startCore(this, config)) {
-                    if (!proxyOnly) {
-                        // If not proxy-only, establish the VPN interface and start tun2socks
-                        setupVpn(config)
-                    } else {
-                        // Proxy Only Mode: Just mark as running
-                        isRunning = true
-                        Log.d(TAG, "Starting in PROXY_ONLY mode")
-                    }
-                } else {
-                    stopSelf()
-                }
-            }
-        } else if (command == AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE) {
-            stopAll()
+        val command = extractCommand(intent)
+        when (command) {
+            AppConfigs.V2RAY_SERVICE_COMMANDS.START_SERVICE -> handleStartCommand(intent)
+            AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE -> stopAll()
+            else -> Log.w(TAG, "Unknown command received")
         }
 
         return START_STICKY
     }
 
+    override fun onDestroy() {
+        stopAll()
+        super.onDestroy()
+    }
+
+    // MARK: - Service Configuration
+
+    private fun startForegroundService() {
+        createNotificationChannel()
+        val notification = createNotification("VPN Service Running")
+        
+        try {
+            val foregroundServiceType = if (Build.VERSION.SDK_INT >= 34) {
+                FOREGROUND_SERVICE_TYPE_SPECIAL_USE // 32
+            } else null
+            
+            if (foregroundServiceType != null) {
+                startForeground(NOTIFICATION_ID, notification, foregroundServiceType)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground service", e)
+        }
+    }
+
+    private fun extractCommand(intent: Intent): AppConfigs.V2RAY_SERVICE_COMMANDS? {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            intent.getSerializableExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getSerializableExtra("COMMAND") as? AppConfigs.V2RAY_SERVICE_COMMANDS
+        }
+    }
+
+    private fun handleStartCommand(intent: Intent) {
+        val config = extractConfig(intent) ?: return stopSelf()
+        val proxyOnly = intent.getBooleanExtra("PROXY_ONLY", false)
+
+        cleanup() // Ensure clean state
+
+        if (XrayCoreManager.startCore(this, config)) {
+            if (proxyOnly) {
+                isRunning = true
+                Log.d(TAG, "Started in PROXY_ONLY mode")
+            } else {
+                setupVpn(config)
+            }
+        } else {
+            Log.e(TAG, "Failed to start XRay Core")
+            stopSelf()
+        }
+    }
+
+    private fun extractConfig(intent: Intent): XrayConfig? {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            intent.getSerializableExtra("V2RAY_CONFIG", XrayConfig::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getSerializableExtra("V2RAY_CONFIG") as? XrayConfig
+        }
+    }
+
+    // MARK: - VPN Setup
+
     /**
-     * Establishes the VPN interface (TUN) and starts tun2socks.
+     * Establishes the VPN interface (TUN device) and starts tun2socks process.
      */
     private fun setupVpn(config: XrayConfig) {
         try {
-            if (mInterface != null) {
-                mInterface?.close()
-                mInterface = null
+            closeExistingInterface()
+            val builder = configureVpnBuilder(config)
+            vpnInterface = builder.establish()
+
+            if (vpnInterface == null) {
+                handleVpnEstablishmentFailure()
+                return
             }
 
-            val builder = Builder()
-            builder.setSession(config.REMARK)
-            builder.setMtu(1500)
-            builder.addAddress("26.26.26.1", 30)
-            builder.addRoute("0.0.0.0", 0)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                builder.setMetered(false)
-            }
-            
-            try {
-                builder.addDisallowedApplication(packageName)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to exclude app from VPN", e)
-            }
-
-            // Add routes to exclude the server IP (to prevent routing loop)
-            val serverIp = config.CONNECTED_V2RAY_SERVER_ADDRESS
-            if (serverIp.isNotEmpty() && !serverIp.contains(":")) { // Simple check for IPv4
-                 try {
-                     Log.d(TAG, "Excluding server IP: $serverIp")
-                     val excludedRoutes = excludeIp(serverIp)
-                     for (route in excludedRoutes) {
-                         val parts = route.split("/")
-                         builder.addRoute(parts[0], parts[1].toInt())
-                     }
-                 } catch (e: Exception) {
-                     Log.e(TAG, "Failed to exclude server IP, falling back to 0.0.0.0/0", e)
-                     builder.addRoute("0.0.0.0", 0)
-                 }
-            } else {
-                builder.addRoute("0.0.0.0", 0)
-            }
-
-            // Add DNS servers from config or use defaults
-            try {
-                val dnsServers = config.DNS_SERVERS ?: arrayListOf("8.8.8.8", "114.114.114.114")
-                for (dns in dnsServers) {
-                    builder.addDnsServer(dns)
-                }
-            } catch (e: Exception) {
-                // Fallback to defaults if error
-                builder.addDnsServer("8.8.8.8")
-                builder.addDnsServer("1.1.1.1")
-            }
-
-            // Establish the VPN interface
-            mInterface = builder.establish()
             isRunning = true
-            
-            // Start tun2socks to handle the traffic
             runTun2socks(config)
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to setup VPN", e)
             stopAll()
         }
     }
 
+    private fun closeExistingInterface() {
+        vpnInterface?.runCatching {
+            close()
+            Thread.sleep(INTERFACE_CLOSE_DELAY_MS) // Allow system cleanup
+        }?.onFailure {
+            Log.e(TAG, "Error closing old VPN interface", it)
+        }
+        vpnInterface = null
+    }
+
+    private fun configureVpnBuilder(config: XrayConfig): Builder {
+        return Builder().apply {
+            setSession(config.REMARK)
+            setMtu(VPN_MTU)
+            addAddress(VPN_ADDRESS, VPN_PREFIX_LENGTH)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setMetered(false)
+            }
+
+            // Exclude this app from VPN to prevent loops
+            runCatching {
+                addDisallowedApplication(packageName)
+            }.onFailure {
+                Log.e(TAG, "Failed to exclude app from VPN", it)
+            }
+
+            configureRoutes(this, config)
+            configureDns(this, config)
+        }
+    }
+
+    private fun configureRoutes(builder: Builder, config: XrayConfig) {
+
+        val serverIp = config.CONNECTED_V2RAY_SERVER_ADDRESS
+        if (serverIp.isNotEmpty() && !serverIp.contains(":")) {
+            runCatching {
+                Log.d(TAG, "Excluding server IP: $serverIp")
+                excludeIp(serverIp).forEach { route ->
+                    val (address, prefix) = route.split("/")
+                    builder.addRoute(address, prefix.toInt())
+                }
+            }.onFailure {
+                Log.e(TAG, "Failed to exclude server IP, using default route", it)
+                builder.addRoute(DEFAULT_ROUTE_ADDRESS, DEFAULT_ROUTE_PREFIX)
+            }
+        } else {
+            builder.addRoute(DEFAULT_ROUTE_ADDRESS, DEFAULT_ROUTE_PREFIX)
+        }
+    }
+
+    private fun configureDns(builder: Builder, config: XrayConfig) {
+        val dnsServers = config.DNS_SERVERS ?: DEFAULT_DNS_SERVERS
+        
+        runCatching {
+            dnsServers.forEach { builder.addDnsServer(it) }
+        }.onFailure {
+            Log.w(TAG, "Failed to configure DNS, using fallback", it)
+            DEFAULT_DNS_FALLBACK.forEach { builder.addDnsServer(it) }
+        }
+    }
+
+    private fun handleVpnEstablishmentFailure() {
+        Log.e(TAG, "Failed to establish VPN interface. " +
+                "This can happen if another VPN is active or permission was revoked.")
+
+        sendBroadcast(Intent(AppConfigs.V2RAY_CONNECTION_INFO).apply {
+            putExtra("STATE", AppConfigs.V2RAY_STATES.V2RAY_DISCONNECTED)
+        })
+
+        XrayCoreManager.stopCore(this)
+        stopSelf()
+    }
+
+    // MARK: - Tun2socks Management
+
     /**
-     * Starts the tun2socks process and initiates the FD transfer.
+     * Starts the tun2socks process and initiates file descriptor transfer.
      */
     private fun runTun2socks(config: XrayConfig) {
         val tun2socksPath = File(applicationInfo.nativeLibraryDir, "libtun2socks.so").absolutePath
-        val sockPath = File(filesDir, "sock_path").absolutePath
-        
-        // Command to start tun2socks. 
-        // Note: We pass -sock-path to tell it where to listen for the FD.
-        val cmd = arrayListOf(
-            tun2socksPath,
-            "-sock-path", sockPath,
-            "-proxy", "socks5://127.0.0.1:${config.LOCAL_SOCKS5_PORT}",
-            "-mtu", "1500",
-            "-loglevel", "debug"
-        )
+        val sockPath = File(filesDir, SOCKET_PATH).absolutePath
 
-        Log.d(TAG, "tun2socks command: ${cmd.joinToString(" ")}")
+        val command = buildTun2socksCommand(tun2socksPath, sockPath, config)
+        Log.d(TAG, "Starting tun2socks: ${command.joinToString(" ")}")
 
-        try {
-            val pb = ProcessBuilder(cmd)
-            pb.redirectErrorStream(true)
-            pb.directory(filesDir)
-            tun2socksProcess = pb.start()
-
-            // Read tun2socks output in a separate thread
-            Thread {
-                try {
-                    tun2socksProcess?.inputStream?.bufferedReader()?.use { reader ->
-                        reader.forEachLine { line ->
-                            Log.d(TAG, "tun2socks: $line")
-                        }
-                    }
-                    
-                    tun2socksProcess?.waitFor()
-                    if (isRunning) {
-                        // Restart if crashed and still supposed to be running
-                        Log.e(TAG, "tun2socks exited unexpectedly, restarting...")
-                        runTun2socks(config)
-                    }
-                } catch (e: java.io.InterruptedIOException) {
-                    // Expected when stopping
-                } catch (e: InterruptedException) {
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error reading tun2socks output", e)
-                }
+        runCatching {
+            tun2socksProcess = ProcessBuilder(command).apply {
+                redirectErrorStream(true)
+                directory(filesDir)
             }.start()
 
-            // Send the TUN file descriptor to tun2socks via socket
+            monitorTun2socksProcess(config)
             sendFd()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start tun2socks", e)
+        }.onFailure {
+            Log.e(TAG, "Failed to start tun2socks", it)
             stopAll()
         }
     }
 
-    /**
-     * Sends the TUN interface file descriptor to the running tun2socks process.
-     * This uses a Unix Domain Socket to pass the FD, which is required because
-     * ProcessBuilder cannot inherit FDs on Android.
-     */
-    private fun sendFd() {
-        val fd = mInterface?.fileDescriptor ?: return
-        val sockFile = File(filesDir, "sock_path").absolutePath
+    private fun buildTun2socksCommand(
+        executablePath: String,
+        socketPath: String,
+        config: XrayConfig
+    ): List<String> {
+        return listOf(
+            executablePath,
+            "-sock-path", socketPath,
+            "-proxy", "socks5://127.0.0.1:${config.LOCAL_SOCKS5_PORT}",
+            "-mtu", TUN2SOCKS_MTU.toString(),
+            "-loglevel", TUN2SOCKS_LOG_LEVEL
+        )
+    }
 
+    private fun monitorTun2socksProcess(config: XrayConfig) {
         Thread {
-            var tries = 0
-            while (tries < 10) {
-                try {
-                    Thread.sleep(500)
-                    val localSocket = LocalSocket()
-                    localSocket.connect(LocalSocketAddress(sockFile, LocalSocketAddress.Namespace.FILESYSTEM))
-                    val out = localSocket.outputStream
-                    // This magic call attaches the FD to the socket message
-                    localSocket.setFileDescriptorsForSend(arrayOf(fd))
-                    out.write(32) // Send a dummy byte to trigger the transfer
-                    localSocket.setFileDescriptorsForSend(null)
-                    localSocket.shutdownOutput()
-                    localSocket.close()
-                    break
-                } catch (e: Exception) {
-                    tries++
+            runCatching {
+                tun2socksProcess?.inputStream?.bufferedReader()?.use { reader ->
+                    reader.forEachLine { line ->
+                        Log.d(TAG, "tun2socks: $line")
+                    }
+                }
+
+                val exitCode = tun2socksProcess?.waitFor()
+                if (isRunning) {
+                    Log.e(TAG, "tun2socks exited unexpectedly (code: $exitCode), restarting...")
+                    Thread.sleep(TUN2SOCKS_START_DELAY_MS)
+                    runTun2socks(config)
+                }
+            }.onFailure { exception ->
+                when (exception) {
+                    is java.io.InterruptedIOException, is InterruptedException -> {
+                        // Expected when stopping
+                        Log.d(TAG, "tun2socks monitor thread interrupted")
+                    }
+                    else -> Log.e(TAG, "Error in tun2socks monitor", exception)
                 }
             }
         }.start()
     }
 
+    // MARK: - File Descriptor Transfer
+
     /**
-     * Cleans up resources (tun2socks process, VPN interface) without stopping the service completely.
+     * Sends the TUN interface file descriptor to the running tun2socks process.
+     *
+     * Uses a Unix Domain Socket to pass the FD across process boundaries,
+     * which is required because ProcessBuilder cannot inherit FDs on Android.
+     */
+    private fun sendFd() {
+        val fd = vpnInterface?.fileDescriptor ?: return
+        val sockPath = File(filesDir, SOCKET_PATH).absolutePath
+
+        Thread {
+            repeat(FD_TRANSFER_MAX_RETRIES) { attempt ->
+                runCatching {
+                    Thread.sleep(FD_TRANSFER_RETRY_DELAY_MS)
+                    
+                    LocalSocket().use { socket ->
+                        socket.connect(LocalSocketAddress(sockPath, LocalSocketAddress.Namespace.FILESYSTEM))
+                        socket.setFileDescriptorsForSend(arrayOf(fd))
+                        socket.outputStream.write(FD_TRANSFER_MAGIC_BYTE)
+                        socket.setFileDescriptorsForSend(null)
+                        socket.shutdownOutput()
+                    }
+                    
+                    Log.d(TAG, "Successfully transferred TUN FD to tun2socks")
+                    return@Thread
+                }.onFailure {
+                    if (attempt == FD_TRANSFER_MAX_RETRIES - 1) {
+                        Log.e(TAG, "Failed to send FD after $FD_TRANSFER_MAX_RETRIES attempts", it)
+                    }
+                }
+            }
+        }.start()
+    }
+
+    // MARK: - Cleanup Methods
+
+    /**
+     * Cleans up VPN resources without stopping the service.
      * Used when restarting or switching configurations.
      */
     private fun cleanup() {
         isRunning = false
         tun2socksProcess?.destroy()
         tun2socksProcess = null
-        try {
-            mInterface?.close()
-            mInterface = null
-        } catch (e: Exception) {}
+        vpnInterface?.runCatching { close() }
+        vpnInterface = null
     }
 
     /**
-     * Stops everything: tun2socks, VPN interface, and Xray Core.
+     * Stops all components: tun2socks, VPN interface, and XRay Core.
      */
     private fun stopAll() {
         cleanup()
         XrayCoreManager.stopCore(this)
-        stopForeground(true)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        
         stopSelf()
-    }
-
-    override fun onDestroy() {
-        stopAll()
-        super.onDestroy()
     }
 
     /**
@@ -364,7 +419,39 @@ class XrayVPNService : VpnService() {
             .build()
     }
 
+    // MARK: - Companion Object
+
     companion object {
         private const val TAG = "XrayVPNService"
+        
+        // Notification
+        private const val NOTIFICATION_ID = 1
+        private const val FOREGROUND_SERVICE_TYPE_SPECIAL_USE = 32
+        
+        // VPN Configuration
+        private const val VPN_MTU = 1500
+        private const val VPN_ADDRESS = "26.26.26.1"
+        private const val VPN_PREFIX_LENGTH = 30
+        private const val DEFAULT_ROUTE_ADDRESS = "0.0.0.0"
+        private const val DEFAULT_ROUTE_PREFIX = 0
+        
+        // DNS Configuration
+        private val DEFAULT_DNS_SERVERS = arrayListOf("8.8.8.8", "114.114.114.114")
+        private val DEFAULT_DNS_FALLBACK = arrayListOf("8.8.8.8", "1.1.1.1")
+        
+        // Tun2socks Configuration
+        private const val SOCKET_PATH = "sock_path"
+        private const val TUN2SOCKS_MTU = 1500
+        private const val TUN2SOCKS_LOG_LEVEL = "debug"
+        
+        // File Descriptor Transfer
+        private const val FD_TRANSFER_MAX_RETRIES = 10
+        private const val FD_TRANSFER_RETRY_DELAY_MS = 500L
+        private const val FD_TRANSFER_MAGIC_BYTE = 32
+        
+        // Timing
+        private const val INTERFACE_CLOSE_DELAY_MS = 200L
+        private const val TUN2SOCKS_START_DELAY_MS = 1000L
     }
 }
+
