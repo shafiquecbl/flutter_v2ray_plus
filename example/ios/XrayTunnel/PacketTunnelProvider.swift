@@ -105,7 +105,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             throw TunnelError.missingXRayConfig
         }
         
-        let dnsServers = providerConfig["dnsServers"] as? [String] ?? Self.defaultDNSServers
+        // Get DNS servers from configuration, or use default
+        // Handle both nil and empty array cases
+        var dnsServers = providerConfig["dnsServers"] as? [String] ?? []
+        if dnsServers.isEmpty {
+            dnsServers = Self.defaultDNSServers
+            NSLog("XRay: Using default DNS servers: \(dnsServers)")
+        } else {
+            NSLog("XRay: Using custom DNS servers: \(dnsServers)")
+        }
+        
         return (xrayConfig, dnsServers)
     }
     
