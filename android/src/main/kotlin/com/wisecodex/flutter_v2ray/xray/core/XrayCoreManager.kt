@@ -97,15 +97,14 @@ object XrayCoreManager {
     private fun prepareConfigurationFile(context: Context, config: XrayConfig): File {
         val configJson = JSONObject(config.V2RAY_FULL_JSON_CONFIG)
 
-            injectApiConfiguration(configJson)
-            injectStatsConfiguration(configJson)
-            injectPolicyConfiguration(configJson)
-            injectInbounds(configJson, config)
-            injectRoutingRules(configJson)
+        injectApiConfiguration(configJson)
+        injectStatsConfiguration(configJson)
+        injectPolicyConfiguration(configJson)
+        injectInbounds(configJson, config)
+        injectRoutingRules(configJson)
 
-            File(context.filesDir, CONFIG_FILE_NAME).apply {
-                writeText(configJson.toString())
-            }
+        return File(context.filesDir, CONFIG_FILE_NAME).apply {
+            writeText(configJson.toString())
         }
     }
 
@@ -200,8 +199,9 @@ object XrayCoreManager {
         
         routing.put("rules", rules)
         config.put("routing", routing)
+    }
 
-        // 2. Find Xray executable (libxray.so)
+    // MARK: - Process Management
 
     private fun findXrayExecutable(context: Context): File? {
         return File(context.applicationInfo.nativeLibraryDir, XRAY_EXECUTABLE_NAME).takeIf { it.exists() }
@@ -436,15 +436,18 @@ object XrayCoreManager {
             val startTime = System.currentTimeMillis()
             val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress(LOCALHOST, socksPort))
             
-            (java.net.URL(url).openConnection(proxy) as java.net.HttpURLConnection).apply {
-                connectTimeout = CONNECTION_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                requestMethod = "HEAD"
-            }.use { connection ->
+            val connection = java.net.URL(url).openConnection(proxy) as java.net.HttpURLConnection
+            connection.connectTimeout = CONNECTION_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.requestMethod = "HEAD"
+            
+            try {
                 val responseCode = connection.responseCode
                 val delay = System.currentTimeMillis() - startTime
                 Log.d(TAG, "Delay measurement successful: ${delay}ms (response code: $responseCode)")
                 delay
+            } finally {
+                connection.disconnect()
             }
         }.onFailure {
             Log.e(TAG, "Failed to measure delay", it)
@@ -518,36 +521,34 @@ object XrayCoreManager {
         return ""
     }
 
-    // MARK: - Companion Object
-
-    companion object {
-        private const val TAG = "XrayCoreManager"
-        
-        // Notification
-        private const val NOTIFICATION_ID = 1
-        private const val NOTIFICATION_CHANNEL_ID = "XRAY_SERVICE_CHANNEL"
-        
-        // Configuration Files
-        private const val CONFIG_FILE_NAME = "config.json"
-        private const val TEMP_CONFIG_FILE_NAME = "temp_delay_config.json"
-        private const val XRAY_EXECUTABLE_NAME = "libxray.so"
-        
-        // Network
-        private const val LOCALHOST = "127.0.0.1"
-        private const val DEFAULT_API_PORT = 10809
-        private const val DEFAULT_SOCKS_PORT = 10807
-        private const val DEFAULT_TEMP_PORT = 10806
-        
-        // Environment Variables
-        private const val ENV_XRAY_LOCATION_ASSET = "XRAY_LOCATION_ASSET"
-        
-        // Traffic Statistics
-        private val ZERO_TRAFFIC = longArrayOf(0, 0, 0, 0)
-        
-        // Timing
-        private const val TIMER_INTERVAL_MS = 1000L
-        private const val TEMP_XRAY_STARTUP_DELAY_MS = 1000L
-        private const val CONNECTION_TIMEOUT_MS = 5000
-        private const val READ_TIMEOUT_MS = 5000
-    }
+    // MARK: - Constants
+    
+    private const val TAG = "XrayCoreManager"
+    
+    // Notification
+    private const val NOTIFICATION_ID = 1
+    private const val NOTIFICATION_CHANNEL_ID = "XRAY_SERVICE_CHANNEL"
+    
+    // Configuration Files
+    private const val CONFIG_FILE_NAME = "config.json"
+    private const val TEMP_CONFIG_FILE_NAME = "temp_delay_config.json"
+    private const val XRAY_EXECUTABLE_NAME = "libxray.so"
+    
+    // Network
+    private const val LOCALHOST = "127.0.0.1"
+    private const val DEFAULT_API_PORT = 10809
+    private const val DEFAULT_SOCKS_PORT = 10807
+    private const val DEFAULT_TEMP_PORT = 10806
+    
+    // Environment Variables
+    private const val ENV_XRAY_LOCATION_ASSET = "XRAY_LOCATION_ASSET"
+    
+    // Traffic Statistics
+    private val ZERO_TRAFFIC = longArrayOf(0, 0, 0, 0)
+    
+    // Timing
+    private const val TIMER_INTERVAL_MS = 1000L
+    private const val TEMP_XRAY_STARTUP_DELAY_MS = 1000L
+    private const val CONNECTION_TIMEOUT_MS = 5000
+    private const val READ_TIMEOUT_MS = 5000
 }

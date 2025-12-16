@@ -165,6 +165,16 @@ class XrayVPNService : VpnService() {
                 Log.e(TAG, "Failed to exclude app from VPN", it)
             }
 
+            // Apply blocked apps (Per-App VPN)
+            config.BLOCKED_APPS.forEach { blockedApp ->
+                runCatching {
+                    addDisallowedApplication(blockedApp)
+                    Log.d(TAG, "Excluded app from VPN: $blockedApp")
+                }.onFailure {
+                    Log.w(TAG, "Failed to exclude app '$blockedApp' from VPN", it)
+                }
+            }
+
             configureRoutes(this, config)
             configureDns(this, config)
         }

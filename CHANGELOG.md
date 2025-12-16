@@ -1,3 +1,22 @@
+## 1.0.11
+
+### Critical Bug Fixes
+- **HOTFIX:** Fixed syntax errors in XrayCoreManager.kt that broke Android build with Kotlin 2.x ([#6](https://github.com/shafiquecbl/flutter_v2ray_plus/issues/6))
+  - Removed extra closing brace in `prepareConfigurationFile` method
+  - Added missing closing brace in `injectRoutingRules` method
+  - Replaced `HttpURLConnection.use{}` with manual disconnect for Kotlin 2.x compatibility
+  - Removed `companion object` wrapper from singleton object (not allowed in Kotlin)
+- **HOTFIX:** Implemented missing Per-App VPN (blockedApps) functionality ([#7](https://github.com/shafiquecbl/flutter_v2ray_plus/issues/7))
+  - Added `addDisallowedApplication` calls for apps in `BLOCKED_APPS` configuration
+  - Apps specified in `blockedApps` parameter are now properly excluded from VPN routing
+
+### Updates
+- **Android:** Updated Xray Core to latest version in jniLibs
+
+### Notes
+- This hotfix resolves all compilation errors introduced in v1.0.10
+- Per-App VPN feature now works correctly on Android
+
 ## 1.0.10
 
 ### iOS Fixes
