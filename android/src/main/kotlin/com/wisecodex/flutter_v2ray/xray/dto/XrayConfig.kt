@@ -60,6 +60,9 @@ data class XrayConfig(
     /** Text for the disconnect button in the notification. */
     var NOTIFICATION_DISCONNECT_BUTTON_NAME: String = "Disconnect",
     
+    /** Whether to show the disconnect button in the notification (default: true). */
+    var SHOW_NOTIFICATION_DISCONNECT_BUTTON: Boolean = true,
+    
     /** Domain resolution strategy (e.g. "IPIfNonMatch"). */
     var DOMAIN_STRATEGY: String = "",
     

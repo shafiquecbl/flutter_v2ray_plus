@@ -382,8 +382,11 @@ object XrayCoreManager {
     }
 
     private fun showNotification(context: Service, config: XrayConfig) {
+        // Check notification permission for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "Notification permission not granted - VPN will run without notification")
+                Log.w(TAG, "Service will still appear in 'VPN' section of system settings")
                 return
             }
         }
@@ -394,24 +397,32 @@ object XrayCoreManager {
         launchIntent?.action = "FROM_DISCONNECT_BTN"
         launchIntent?.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
         val contentPendingIntent = PendingIntent.getActivity(context, 0, launchIntent, flags)
 
-        val stopIntent = Intent(context, XrayVPNService::class.java)
-        stopIntent.putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE)
-        val stopPendingIntent = PendingIntent.getService(context, 0, stopIntent, flags)
-
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(config.APPLICATION_ICON) // Ensure this icon resource exists or is passed correctly
+            .setSmallIcon(config.APPLICATION_ICON)
             .setContentTitle(config.REMARK)
             .setContentText("Connected")
-            .addAction(0, config.NOTIFICATION_DISCONNECT_BUTTON_NAME, stopPendingIntent)
             .setContentIntent(contentPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setShowWhen(true)
 
+        // Conditionally add disconnect button based on config
+        if (config.SHOW_NOTIFICATION_DISCONNECT_BUTTON) {
+            val stopIntent = Intent(context, XrayVPNService::class.java)
+            stopIntent.putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE)
+            val stopPendingIntent = PendingIntent.getService(context, 0, stopIntent, flags)
+            builder.addAction(0, config.NOTIFICATION_DISCONNECT_BUTTON_NAME, stopPendingIntent)
+        }
+
         context.startForeground(NOTIFICATION_ID, builder.build())
+        Log.d(TAG, "Notification shown with disconnect button: ${config.SHOW_NOTIFICATION_DISCONNECT_BUTTON}")
     }
 
     // MARK: - Delay Measurement

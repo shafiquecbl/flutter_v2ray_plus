@@ -86,6 +86,7 @@ class XrayVPNService : VpnService() {
         }
     }
 
+    @Synchronized
     private fun handleStartCommand(intent: Intent) {
         val config = extractConfig(intent) ?: return stopSelf()
         val proxyOnly = intent.getBooleanExtra("PROXY_ONLY", false)
@@ -365,12 +366,34 @@ class XrayVPNService : VpnService() {
      * Cleans up VPN resources without stopping the service.
      * Used when restarting or switching configurations.
      */
+    // MARK: - Cleanup
     private fun cleanup() {
-        isRunning = false
-        tun2socksProcess?.destroy()
-        tun2socksProcess = null
-        vpnInterface?.runCatching { close() }
-        vpnInterface = null
+        try {
+            // Terminate tun2socks process
+            tun2socksProcess?.let { process ->
+                try {
+                    process.destroy()
+                    
+                    // Wait up to 2 seconds for graceful termination
+                    if (!process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                        Log.w(TAG, "tun2socks didn't terminate gracefully, forcing...")
+                        process.destroyForcibly()
+                        process.waitFor(1, java.util.concurrent.TimeUnit.SECONDS)
+                    }
+                    Log.d(TAG, "tun2socks process terminated")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error terminating tun2socks", e)
+                }
+            }
+            tun2socksProcess = null
+
+            // Close VPN interface
+            closeExistingInterface()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during cleanup", e)
+        } finally {
+            isRunning = false
+        }
     }
 
     /**
