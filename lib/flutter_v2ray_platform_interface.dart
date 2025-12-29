@@ -64,7 +64,9 @@ abstract class FlutterV2rayPlatform extends PlatformInterface {
 
   /// Measures delay/ping for the currently connected server.
   Future<int> getConnectedServerDelay(String url) {
-    throw UnimplementedError('getConnectedServerDelay() has not been implemented.');
+    throw UnimplementedError(
+      'getConnectedServerDelay() has not been implemented.',
+    );
   }
 
   /// Gets the version of the underlying core (Xray).

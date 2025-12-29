@@ -23,7 +23,9 @@ class MyApp extends StatelessWidget {
           primary: Colors.orangeAccent,
           secondary: Colors.orangeAccent.shade200,
         ),
-        inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+        ),
       ),
       home: const HomePage(),
     );
@@ -38,7 +40,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final ValueNotifier<VlessStatus> vlessStatus = ValueNotifier<VlessStatus>(VlessStatus());
+  final ValueNotifier<VlessStatus> vlessStatus = ValueNotifier<VlessStatus>(
+    VlessStatus(),
+  );
   StreamSubscription<VlessStatus>? statusSubscription;
 
   late final FlutterV2ray flutterV2Ray = FlutterV2ray();
@@ -84,15 +88,17 @@ class _HomePageState extends State<HomePage> {
   Future<void> _requestPermission() async {
     final ok = await flutterV2Ray.requestPermission();
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(ok ? 'Permission granted' : 'Permission denied')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Permission granted' : 'Permission denied')),
+    );
   }
 
   Future<void> _connect() async {
     if (!await flutterV2Ray.requestPermission()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission Denied')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Permission Denied')));
       return;
     }
 
@@ -113,15 +119,20 @@ class _HomePageState extends State<HomePage> {
   Future<void> _importFromClipboard() async {
     if (await Clipboard.hasStrings()) {
       try {
-        final text = (await Clipboard.getData('text/plain'))?.text?.trim() ?? '';
+        final text =
+            (await Clipboard.getData('text/plain'))?.text?.trim() ?? '';
         final FlutterV2RayURL parsed = FlutterV2ray.parseFromURL(text);
         remark = parsed.remark;
         config.text = parsed.getFullConfiguration();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Imported')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Imported')));
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Import error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import error: $e')));
       }
     }
   }
@@ -137,14 +148,23 @@ class _HomePageState extends State<HomePage> {
             content: TextField(
               controller: controller,
               maxLines: 6,
-              decoration: const InputDecoration(hintText: 'one subnet per line, e.g. 192.168.0.0/13'),
+              decoration: const InputDecoration(
+                hintText: 'one subnet per line, e.g. 192.168.0.0/13',
+              ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
               ElevatedButton(
                 onPressed: () {
                   final list =
-                      controller.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                      controller.text
+                          .split('\n')
+                          .map((s) => s.trim())
+                          .where((s) => s.isNotEmpty)
+                          .toList();
                   setState(() {
                     bypassSubnets = list;
                   });
@@ -236,7 +256,10 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Configuration (JSON)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const Text(
+              'Configuration (JSON)',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             SizedBox(
               height: 140,
@@ -245,7 +268,10 @@ class _HomePageState extends State<HomePage> {
                 maxLines: null,
                 expands: true,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.all(12)),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.all(12),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -292,9 +318,17 @@ class _HomePageState extends State<HomePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(state, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      state,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     Chip(
-                      backgroundColor: Colors.orangeAccent.shade100.withValues(alpha: 0.15),
+                      backgroundColor: Colors.orangeAccent.shade100.withValues(
+                        alpha: 0.15,
+                      ),
                       label: Text(_formatDuration(durationSeconds)),
                     ),
                   ],
@@ -302,16 +336,31 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _smallInfo('Up', _formatBytes(upTraffic), '$upSpeed B/s')),
+                    Expanded(
+                      child: _smallInfo(
+                        'Up',
+                        _formatBytes(upTraffic),
+                        '$upSpeed B/s',
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _smallInfo('Down', _formatBytes(downTraffic), '$downSpeed B/s')),
+                    Expanded(
+                      child: _smallInfo(
+                        'Down',
+                        _formatBytes(downTraffic),
+                        '$downSpeed B/s',
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 if ((vlessStatus.value.state).toUpperCase() == 'CONNECTED')
                   LinearProgressIndicator(value: null),
                 const SizedBox(height: 8),
-                Text('Core: ${coreVersion ?? '-'}', style: const TextStyle(fontSize: 12)),
+                Text(
+                  'Core: ${coreVersion ?? '-'}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
             );
           },
@@ -346,10 +395,14 @@ class _HomePageState extends State<HomePage> {
                 if ((vlessStatus.value.state).toUpperCase() == 'CONNECTED') {
                   delay = await flutterV2Ray.getConnectedServerDelay();
                 } else {
-                  delay = await flutterV2Ray.getServerDelay(config: config.text);
+                  delay = await flutterV2Ray.getServerDelay(
+                    config: config.text,
+                  );
                 }
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$delay ms')));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('$delay ms')));
               },
               icon: const Icon(Icons.timer),
               label: const Text('Delay'),
@@ -364,11 +417,20 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 12, color: Colors.white70),
+        ),
         const SizedBox(height: 6),
-        Text(traffic, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(
+          traffic,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 4),
-        Text(speed, style: const TextStyle(fontSize: 12, color: Colors.white60)),
+        Text(
+          speed,
+          style: const TextStyle(fontSize: 12, color: Colors.white60),
+        ),
       ],
     );
   }

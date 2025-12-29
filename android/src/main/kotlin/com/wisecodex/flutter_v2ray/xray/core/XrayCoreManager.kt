@@ -48,12 +48,14 @@ object XrayCoreManager {
     /**
      * Starts the Xray Core process with the provided configuration.
      *
+     * NOTE: This only starts the Xray proxy process. It does NOT set state to CONNECTED
+     * or show notifications. Call onVpnEstablished() after VPN interface is ready.
+     *
      * @param context The service context for file access and notifications
      * @param config The Xray configuration object
      * @return true if started successfully, false otherwise
      */
     fun startCore(context: Service, config: XrayConfig): Boolean {
-        AppConfigs.V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTING
         AppConfigs.V2RAY_CONFIG = config
 
         return runCatching {
@@ -62,10 +64,31 @@ object XrayCoreManager {
             
             Utilities.copyAssets(context)
             startXrayProcess(context, configFile, xrayExecutable, config)
+            Log.d(TAG, "Xray Core process started successfully")
             true
         }.onFailure {
             Log.e(TAG, "Failed to start Xray Core", it)
         }.getOrDefault(false)
+    }
+
+    /**
+     * Called by XrayVPNService after VPN interface is successfully established.
+     * This is when we mark the connection as active and start UI updates.
+     *
+     * @param context The service context
+     */
+    fun onVpnEstablished(context: Service) {
+        Log.d(TAG, "VPN interface established, transitioning to CONNECTED state")
+        
+        AppConfigs.V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTED
+        
+        val config = AppConfigs.V2RAY_CONFIG
+        if (config != null) {
+            showNotification(context, config)
+            startTimer(context)
+        } else {
+            Log.e(TAG, "Config is null in onVpnEstablished")
+        }
     }
 
     /**
@@ -227,11 +250,8 @@ object XrayCoreManager {
             environment()[ENV_XRAY_LOCATION_ASSET] = Utilities.getUserAssetsPath(context)
         }.start()
 
-        AppConfigs.V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTED
-        startTimer(context)
-        showNotification(context, config)
-
         monitorXrayProcess(context)
+        Log.d(TAG, "Xray process started, waiting for VPN interface confirmation")
     }
 
     private fun monitorXrayProcess(context: Service) {

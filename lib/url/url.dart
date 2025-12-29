@@ -30,7 +30,12 @@ abstract class FlutterV2RayURL {
     "allocate": null,
   };
 
-  Map<String, dynamic> log = {"access": "", "error": "", "loglevel": "error", "dnsLog": false};
+  Map<String, dynamic> log = {
+    "access": "",
+    "error": "",
+    "loglevel": "error",
+    "dnsLog": false,
+  };
 
   Map<String, dynamic> get outbound1;
 
@@ -103,7 +108,9 @@ abstract class FlutterV2RayURL {
   ///
   /// indent: json encoder indent
   String getFullConfiguration({int indent = 2}) {
-    return JsonEncoder.withIndent(' ' * indent).convert(removeNulls(Map.from(fullConfiguration)));
+    return JsonEncoder.withIndent(
+      ' ' * indent,
+    ).convert(removeNulls(Map.from(fullConfiguration)));
   }
 
   late Map<String, dynamic> streamSetting = {
@@ -158,7 +165,9 @@ abstract class FlutterV2RayURL {
             "method": "GET",
           };
           sni =
-              streamSetting['tcpSettings']['header']['request']['headers']['Host'].length > 0
+              streamSetting['tcpSettings']['header']['request']['headers']['Host']
+                          .length >
+                      0
                   ? streamSetting['tcpSettings']['header']['request']['headers']['Host'][0]
                   : sni;
         }
@@ -193,7 +202,10 @@ abstract class FlutterV2RayURL {
         "host": host?.split(",") ?? "",
         "path": path ?? ['/'],
       };
-      sni = streamSetting['h2Setting']['host'].length > 0 ? streamSetting['h2Setting']['host'][0] : sni;
+      sni =
+          streamSetting['h2Setting']['host'].length > 0
+              ? streamSetting['h2Setting']['host'][0]
+              : sni;
     } else if (transport == 'quic') {
       streamSetting['quicSettings'] = {
         "security": quicSecurity ?? 'none',
@@ -201,11 +213,18 @@ abstract class FlutterV2RayURL {
         "header": {"type": headerType ?? "none"},
       };
     } else if (transport == 'grpc') {
-      streamSetting['grpcSettings'] = {"serviceName": serviceName ?? "", "multiMode": mode == "multi"};
+      streamSetting['grpcSettings'] = {
+        "serviceName": serviceName ?? "",
+        "multiMode": mode == "multi",
+      };
       sni = host ?? "";
     } else if (transport == 'xhttp') {
       streamSetting['network'] = 'xhttp';
-      streamSetting['xhttpSettings'] = {"host": host ?? "", "mode": mode ?? "auto", "path": path ?? "/"};
+      streamSetting['xhttpSettings'] = {
+        "host": host ?? "",
+        "mode": mode ?? "auto",
+        "path": path ?? "/",
+      };
       sni = host ?? "";
     }
     return sni;

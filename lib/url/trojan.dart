@@ -27,7 +27,8 @@ class TrojanURL extends FlutterV2RayURL {
         streamSecurity: uri.queryParameters['security'] ?? 'tls',
         allowInsecure: allowInsecure,
         sni: uri.queryParameters["sni"] ?? sni,
-        fingerprint: streamSetting['tlsSettings']?['fingerprint'] ?? "randomized",
+        fingerprint:
+            streamSetting['tlsSettings']?['fingerprint'] ?? "randomized",
         alpns: uri.queryParameters['alpn'],
         publicKey: null,
         shortId: null,
@@ -39,7 +40,8 @@ class TrojanURL extends FlutterV2RayURL {
         streamSecurity: 'tls',
         allowInsecure: allowInsecure,
         sni: '',
-        fingerprint: streamSetting['tlsSettings']?['fingerprint'] ?? "randomized",
+        fingerprint:
+            streamSetting['tlsSettings']?['fingerprint'] ?? "randomized",
         alpns: null,
         publicKey: null,
         shortId: null,

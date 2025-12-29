@@ -118,22 +118,49 @@ class XrayVPNService : VpnService() {
 
     /**
      * Establishes the VPN interface (TUN device) and starts tun2socks process.
+     * Only after this succeeds do we notify XrayCoreManager to mark connection as active.
      */
     private fun setupVpn(config: XrayConfig) {
         try {
+            // Check if VPN permission is still granted
+            if (prepare(this) != null) {
+                Log.e(TAG, "VPN permission not granted or was revoked")
+                handleVpnEstablishmentFailure("VPN permission not granted")
+                return
+            }
+            
             closeExistingInterface()
+            
+            // Build and establish VPN interface
             val builder = configureVpnBuilder(config)
             vpnInterface = builder.establish()
 
+            // CRITICAL: Verify VPN interface was successfully established
             if (vpnInterface == null) {
-                handleVpnEstablishmentFailure()
+                Log.e(TAG, "VPN interface establishment failed - builder.establish() returned null")
+                Log.e(TAG, "This can happen if:")
+                Log.e(TAG, "  1. Another VPN is currently active")
+                Log.e(TAG, "  2. VPN permission was revoked")
+                Log.e(TAG, "  3. Android system denied VPN due to resource constraints")
+                handleVpnEstablishmentFailure("builder.establish() returned null")
                 return
             }
 
+            Log.d(TAG, "VPN interface established successfully")
+            Log.d(TAG, "VPN file descriptor: ${vpnInterface?.fd}")
+            
+            // Mark local service state as running
             isRunning = true
+            
+            // Start tun2socks to route traffic
             runTun2socks(config)
+            
+            // CRITICAL: Only NOW tell XrayCoreManager that VPN is fully ready
+            // This sets CONNECTED state, shows notification, and starts timer
+            XrayCoreManager.onVpnEstablished(this)
+            
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to setup VPN", e)
+            Log.e(TAG, "Exception during VPN setup", e)
             stopAll()
         }
     }
@@ -210,15 +237,22 @@ class XrayVPNService : VpnService() {
         }
     }
 
-    private fun handleVpnEstablishmentFailure() {
-        Log.e(TAG, "Failed to establish VPN interface. " +
-                "This can happen if another VPN is active or permission was revoked.")
+    private fun handleVpnEstablishmentFailure(reason: String = "Unknown") {
+        Log.e(TAG, "========== VPN ESTABLISHMENT FAILED ==========")
+        Log.e(TAG, "Reason: $reason")
+        Log.e(TAG, "VPN interface will NOT be created")
+        Log.e(TAG, "Cleaning up XrayCore and stopping service")
+        Log.e(TAG, "=============================================")
 
+        // Send DISCONNECTED broadcast to update app UI
         sendBroadcast(Intent(AppConfigs.V2RAY_CONNECTION_INFO).apply {
             putExtra("STATE", AppConfigs.V2RAY_STATES.V2RAY_DISCONNECTED)
         })
 
+        // Stop XrayCore since VPN failed
         XrayCoreManager.stopCore(this)
+        
+        // Stop the service
         stopSelf()
     }
 

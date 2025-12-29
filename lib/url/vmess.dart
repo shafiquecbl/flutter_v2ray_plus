@@ -65,7 +65,10 @@ class VmessURL extends FlutterV2RayURL {
             {
               "id": rawConfig['id'] ?? '',
               "alterId": int.tryParse(rawConfig['aid'].toString()) ?? 0,
-              "security": (rawConfig['scy']?.isEmpty ?? true) ? security : rawConfig['scy'],
+              "security":
+                  (rawConfig['scy']?.isEmpty ?? true)
+                      ? security
+                      : rawConfig['scy'],
               "level": level,
               "encryption": "",
               "flow": "",

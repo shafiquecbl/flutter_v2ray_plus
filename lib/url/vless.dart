@@ -25,7 +25,9 @@ class VlessURL extends FlutterV2RayURL {
       streamSecurity: uri.queryParameters["security"] ?? "",
       allowInsecure: allowInsecure,
       sni: uri.queryParameters["sni"] ?? sni,
-      fingerprint: uri.queryParameters["fp"] ?? streamSetting['tlsSettings']?['fingerprint'],
+      fingerprint:
+          uri.queryParameters["fp"] ??
+          streamSetting['tlsSettings']?['fingerprint'],
       alpns: uri.queryParameters["alpn"],
       publicKey: uri.queryParameters["pbk"] ?? "",
       shortId: uri.queryParameters["sid"] ?? "",
