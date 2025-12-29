@@ -72,13 +72,14 @@ android {
     sourceSets {
         main {
             java.srcDirs += 'src/main/kotlin'
+            kotlin.srcDirs += 'src/main/kotlin'
             jniLibs.srcDirs = ['src/main/jniLibs']
         }
     }
-     packagingOptions {
-    pickFirst 'lib/**/libc++_shared.so'
-    pickFirst 'lib/**/libxray.so'
-  }
+    packagingOptions {
+        pickFirst 'lib/**/libc++_shared.so'
+        pickFirst 'lib/**/libxray.so'
+    }
 }
 repositories {
     flatDir {

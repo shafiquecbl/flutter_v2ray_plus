@@ -1,3 +1,16 @@
+## 1.0.14
+
+### Critical Bug Fixes
+- **HOTFIX:** Fixed Gradle source set configuration
+  - Added explicit `kotlin.srcDirs` to `build.gradle`
+  - Ensures Kotlin source files are properly discovered when package is consumed
+  - Resolves "Unresolved reference 'AppConfigs'" errors in v1.0.13
+  - Fixed indentation in packagingOptions
+
+### Notes
+- This fixes the Gradle build issue where Kotlin files were present but not compiled
+- All v1.0.12 features remain intact
+
 ## 1.0.13
 
 ### Critical Bug Fixes
