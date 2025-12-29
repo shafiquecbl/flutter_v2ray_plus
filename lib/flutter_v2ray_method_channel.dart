@@ -37,6 +37,7 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
     List<String>? bypassSubnets,
     List<String>? dnsServers,
     bool proxyOnly = false,
+    bool showNotificationDisconnectButton = true,
   }) async {
     await methodChannel.invokeMethod('startVless', {
       "remark": remark,
@@ -46,6 +47,7 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
       "dns_servers": dnsServers,
       "proxy_only": proxyOnly,
       "notificationDisconnectButtonName": notificationDisconnectButtonName,
+      "showNotificationDisconnectButton": showNotificationDisconnectButton,
     });
   }
 

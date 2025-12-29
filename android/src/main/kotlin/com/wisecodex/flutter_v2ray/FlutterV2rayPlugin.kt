@@ -102,21 +102,26 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
     // MARK: - Method Handlers
 
     private fun handleStartVless(call: MethodCall, result: MethodChannel.Result) {
-        val config = buildXrayConfig(call)
+        APPLICATION_NAME = call.argument("remark") ?: DEFAULT_APP_NAME
+        val config = call.argument<String>("config")
         val proxyOnly = call.argument<Boolean>("proxy_only") ?: false
-        
-        AppConfigs.V2RAY_CONNECTION_MODE = if (proxyOnly) {
-            AppConfigs.V2RAY_CONNECTION_MODES.PROXY_ONLY
-        } else {
-            AppConfigs.V2RAY_CONNECTION_MODES.VPN_TUN
+        NOTIFICATION_DISCONNECT_BUTTON_NAME = call.argument("notificationDisconnectButtonName") ?: DEFAULT_DISCONNECT_BUTTON_TEXT
+        val showDisconnectButton = call.argument<Boolean>("showNotificationDisconnectButton") ?: true
+
+        if (config == null) {
+            result.error("INVALID_CONFIG", "Config cannot be null", null)
+            return
         }
 
-        extractServerAddress(call, config)
-        startVpnService(config, proxyOnly)
+        val xrayConfig = buildXrayConfig(call, config).apply {
+            SHOW_NOTIFICATION_DISCONNECT_BUTTON = showDisconnectButton
+        }
+
+        startVpnService(xrayConfig, proxyOnly)
         result.success(null)
     }
 
-    private fun buildXrayConfig(call: MethodCall) = XrayConfig().apply {
+    private fun buildXrayConfig(call: MethodCall, config: String) = XrayConfig().apply {
         REMARK = call.argument("remark") ?: ""
         V2RAY_FULL_JSON_CONFIG = call.argument("config") ?: ""
         BLOCKED_APPS = call.argument<ArrayList<String>>("blocked_apps") ?: ArrayList()

@@ -78,6 +78,12 @@ class FlutterV2ray {
   ///   If null, defaults to ["8.8.8.8", "114.114.114.114"].
   ///
   ///   Example: ["94.140.14.14", "94.140.15.15"] for AdGuard DNS (ad-blocking)
+  ///
+  /// showNotificationDisconnectButton:
+  ///
+  ///   Whether to show the disconnect button in the notification.
+  ///
+  ///   Default: true
   Future<void> startVless({
     required String remark,
     required String config,
@@ -86,6 +92,7 @@ class FlutterV2ray {
     List<String>? dnsServers,
     bool proxyOnly = false,
     String notificationDisconnectButtonName = "DISCONNECT",
+    bool showNotificationDisconnectButton = true,
   }) async {
     try {
       if (jsonDecode(config) == null) {
@@ -103,6 +110,7 @@ class FlutterV2ray {
       bypassSubnets: bypassSubnets,
       dnsServers: dnsServers,
       notificationDisconnectButtonName: notificationDisconnectButtonName,
+      showNotificationDisconnectButton: showNotificationDisconnectButton,
     );
   }
 
