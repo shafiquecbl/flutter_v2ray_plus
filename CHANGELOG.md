@@ -1,3 +1,22 @@
+## 1.0.15
+
+### Critical Bug Fixes
+- **CRITICAL FIX:** Restored V2RAY_CONNECTING state transition in startCore()
+  - Fixes VPN traffic routing issue where VPN connects but traffic uses regular IP
+  - State now properly transitions: DISCONNECTED → CONNECTING → CONNECTED
+  - Android VPN service requires app state to be non-DISCONNECTED for proper activation
+  - Resolves 10-second notification delay
+
+### Root Cause
+- In v1.0.12's "VPN state synchronization fix", the CONNECTING state line was removed
+- This broke the normal VPN flow where traffic routing depends on state being active
+- VPN interface was created but not activated by Android system due to DISCONNECTED state
+
+### Notes
+- This restores proper functionality from v1.0.8-1.0.11
+- Keeps the safety feature: CONNECTED state only set after VPN interface confirmed
+- All v1.0.12 features (notification customization, error handling) remain intact
+
 ## 1.0.14
 
 ### Critical Bug Fixes

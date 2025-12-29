@@ -48,14 +48,17 @@ object XrayCoreManager {
     /**
      * Starts the Xray Core process with the provided configuration.
      *
-     * NOTE: This only starts the Xray proxy process. It does NOT set state to CONNECTED
-     * or show notifications. Call onVpnEstablished() after VPN interface is ready.
+     * This sets the state to CONNECTING and starts the Xray proxy process.
+     * The state will be updated to CONNECTED when onVpnEstablished() is called after
+     * the VPN interface is successfully established.
      *
      * @param context The service context for file access and notifications
      * @param config The Xray configuration object
      * @return true if started successfully, false otherwise
      */
     fun startCore(context: Service, config: XrayConfig): Boolean {
+        // Set state to CONNECTING immediately - this is critical for VPN activation
+        AppConfigs.V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTING
         AppConfigs.V2RAY_CONFIG = config
 
         return runCatching {
