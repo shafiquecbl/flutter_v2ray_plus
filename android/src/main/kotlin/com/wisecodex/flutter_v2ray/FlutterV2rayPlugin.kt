@@ -102,10 +102,8 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
     // MARK: - Method Handlers
 
     private fun handleStartVless(call: MethodCall, result: MethodChannel.Result) {
-        APPLICATION_NAME = call.argument("remark") ?: DEFAULT_APP_NAME
         val config = call.argument<String>("config")
         val proxyOnly = call.argument<Boolean>("proxy_only") ?: false
-        NOTIFICATION_DISCONNECT_BUTTON_NAME = call.argument("notificationDisconnectButtonName") ?: DEFAULT_DISCONNECT_BUTTON_TEXT
         val showDisconnectButton = call.argument<Boolean>("showNotificationDisconnectButton") ?: true
 
         if (config == null) {

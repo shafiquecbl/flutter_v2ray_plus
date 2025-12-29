@@ -47,7 +47,7 @@ abstract class FlutterV2rayPlatform extends PlatformInterface {
     List<String>? blockedApps,
     List<String>? bypassSubnets,
     List<String>? dnsServers,
-   bool proxyOnly = false,
+    bool proxyOnly = false,
     bool showNotificationDisconnectButton = true,
   }) {
     throw UnimplementedError('startVless() has not been implemented.');

@@ -1,3 +1,16 @@
+## 1.0.13
+
+### Critical Bug Fixes
+- **HOTFIX:** Fixed compilation error in FlutterV2rayPlugin.kt
+  - Removed invalid assignments to non-existent `APPLICATION_NAME` and `NOTIFICATION_DISCONNECT_BUTTON_NAME` variables
+  - These values are already properly set in `buildXrayConfig()` method
+  - Resolves "Unresolved reference" errors that broke Android builds in v1.0.12
+
+### Notes
+- This is a critical hotfix for v1.0.12 which had a compilation error
+- No functional changes - only fixes build issue
+- All v1.0.12 features remain intact
+
 ## 1.0.12
 
 ### Critical Bug Fixes
