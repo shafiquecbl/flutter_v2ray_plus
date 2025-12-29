@@ -1,3 +1,43 @@
+## 1.0.12
+
+### Critical Bug Fixes
+- **CRITICAL FIX:** Resolved false "connected" state when VPN interface fails to establish
+  - Fixed issue where app showed "connected" but VPN wasn't actually working
+  - Moved notification/timer start to AFTER VPN interface is confirmed established
+  - Added `onVpnEstablished()` callback to ensure proper state synchronization
+  - VPN state now always matches actual VPN interface status
+  - Enhanced error logging to identify why VPN establishment fails
+- **CRITICAL FIX:** Added VPN permission pre-flight check before attempting to establish
+  - Prevents TOCTOU (Time-of-Check-Time-of-Use) edge cases
+  - Clear error messages when permission is revoked
+- **CRITICAL FIX:** Fixed race condition in rapid connect/disconnect scenarios
+  - Added `@Synchronized` to `handleStartCommand()` to prevent concurrent VPN setups
+- **CRITICAL FIX:** Improved process termination to prevent zombie processes
+  - Added `destroyForcibly()` with 2-second timeout for tun2socks
+  - Graceful termination followed by forced kill if needed
+  - Enhanced cleanup with try-catch-finally for robustness
+
+### New Features
+- **NEW:** Notification disconnect button can now be hidden via configuration
+  - Added `showNotificationDisconnectButton` parameter (default: `true`)
+  - Allows creating notifications without disconnect button for custom UI flows
+  - Example: `startVless(showNotificationDisconnectButton: false)`
+
+### Enhancements
+- **Enhancement:** Improved notification permission handling for Android 13+
+  - VPN continues to work even if notification permission is denied
+  - Added clear logging: "VPN will run without notification"
+  - Service still appears in system VPN settings
+- **Enhancement:** Enhanced error messages throughout VPN lifecycle
+  - Detailed diagnostic logs for VPN establishment failures
+  - Clear identification of common issues (conflicting VPN, permission revoked, etc.)
+
+### Notes
+- This release addresses critical reliability issues reported by users
+- VPN state synchronization fix prevents false sense of security
+- All changes are backwards compatible
+- Comprehensive code review completed (12 edge cases identified and documented)
+
 ## 1.0.11
 
 ### Critical Bug Fixes
