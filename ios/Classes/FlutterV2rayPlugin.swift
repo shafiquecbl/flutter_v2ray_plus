@@ -264,41 +264,6 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         self.lastStatus = statusString
         print("VPN Status Changed: \(statusString)")
     }
-    
-    private func handleStatusChange() {
-        guard let status = self.packetTunnelManager?.status else { return }
-        
-        let statusString: String
-        switch status {
-        case .connected:
-            statusString = "CONNECTED"
-            if timer == nil {
-                startTimer()
-            }
-        case .connecting:
-            statusString = "CONNECTING"
-            if timer == nil {
-                startTimer()
-            }
-        case .disconnecting:
-            statusString = "DISCONNECTING"
-            if timer == nil {
-                startTimer()
-            }
-        case .disconnected, .invalid:
-            statusString = "DISCONNECTED"
-            stopTimer()
-            // Send one last event to ensure UI shows DISCONNECTED
-            self.eventSink?(["0", "0", "0", "0", "0", "DISCONNECTED"])
-        case .reasserting:
-            statusString = "CONNECTING"
-        @unknown default:
-            statusString = "DISCONNECTED"
-        }
-        
-        self.lastStatus = statusString
-        print("VPN Status Changed: \(statusString)")
-    }
 }
 final class PacketTunnelManager: ObservableObject {
     var providerBundleIdentifier: String?

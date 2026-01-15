@@ -1,3 +1,8 @@
+## 1.0.19
+
+### Critical Bug Fixes
+- Remove duplicate `handleStatusChange` method from `FlutterV2rayPlugin.swift`  
+
 ## 1.0.18
 
 ### Critical Bug Fixes
