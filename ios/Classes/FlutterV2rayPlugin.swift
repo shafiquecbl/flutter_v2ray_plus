@@ -15,6 +15,9 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private var totalDownload: Int = 0
     private var uploadSpeed: Int = 0
     private var downloadSpeed: Int = 0
+    private var isStarting: Bool = false
+    private var statusCancellable: AnyCancellable?
+    private var lastStatus: String = "DISCONNECTED"
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "flutter_v2ray", binaryMessenger: registrar.messenger())
@@ -36,38 +39,50 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     
     private func startTimer() {
-        self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true, block: { _ in
-            let elapsed = Date().timeIntervalSince(self.packetTunnelManager?.connectedDate ?? Date())
-            let seconds = Int(elapsed)
-            self.eventSink?(["\(seconds)", "\(self.uploadSpeed)", "\(self.downloadSpeed)", "\(self.totalUpload)", "\(self.totalDownload)", "CONNECTED"])
-            Task{
-                do{
-                    let response =  try await self.packetTunnelManager?.sendProviderMessage(data: "xray_traffic".data(using: .utf8)!)
-                    if response != nil{
-                        let traffic = String(decoding: response!, as: UTF8.self)
-                        let parts = traffic.split(separator: ",")
-                        if let up = Int(parts[0]), let down = Int(parts[1]) {
-                            self.uploadSpeed = up - self.totalUpload
-                            self.downloadSpeed = down - self.totalDownload
-                            self.totalUpload = up
-                            self.totalDownload = down
+        self.timer?.invalidate()
+        self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true, block: { [weak self] _ in
+            guard let self = self else { return }
+            
+            let status = self.lastStatus
+            var seconds = 0
+            
+            if status == "CONNECTED" {
+                let elapsed = Date().timeIntervalSince(self.packetTunnelManager?.connectedDate ?? Date())
+                seconds = Int(elapsed)
+                
+                Task {
+                    do {
+                        let response = try await self.packetTunnelManager?.sendProviderMessage(data: "xray_traffic".data(using: .utf8)!)
+                        if let response = response {
+                            let traffic = String(decoding: response, as: UTF8.self)
+                            let parts = traffic.split(separator: ",")
+                            if parts.count >= 2, let up = Int(parts[0]), let down = Int(parts[1]) {
+                                await MainActor.run {
+                                    self.uploadSpeed = up - self.totalUpload
+                                    self.downloadSpeed = down - self.totalDownload
+                                    self.totalUpload = up
+                                    self.totalDownload = down
+                                }
+                            }
                         }
+                    } catch {
+                        print("Error in traffic: \(error.localizedDescription)")
                     }
-                }catch{
-                    print("Error in traffic: \(error.localizedDescription)")
                 }
             }
+            
+            self.eventSink?(["\(seconds)", "\(self.uploadSpeed)", "\(self.downloadSpeed)", "\(self.totalUpload)", "\(self.totalDownload)", status])
         })
     }
     
     private func stopTimer() {
         self.timer?.invalidate()
         self.timer = nil
-        self.eventSink?(["0", "0", "0", "0", "0", "DISCONNECTED"])
         self.uploadSpeed = 0
         self.downloadSpeed = 0
         self.totalUpload = 0
         self.totalDownload = 0
+        // Don't send event here, let the status observer handle it
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -129,6 +144,11 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     
     private func startVless(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard !isStarting else {
+            result(FlutterError(code: "BUSY", message: "VPN is already starting.", details: nil))
+            return
+        }
+        
         guard let arguments = call.arguments as? [String: Any],
               let remark = arguments["remark"] as? String,
               let config = arguments["config"] as? String,
@@ -141,21 +161,25 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         packetTunnelManager?.remark = remark
         packetTunnelManager?.xrayConfig = configData
         packetTunnelManager?.dnsServers = dnsServers
+        
+        isStarting = true
         Task {
             do {
                 try await packetTunnelManager?.saveToPreferences()
                 try await packetTunnelManager?.start()
-                result(nil)
-                return
+                await MainActor.run {
+                    self.isStarting = false
+                    result(nil)
+                }
             } catch {
-                result(FlutterError(code: "VPN_ERROR",
-                                    message: "Failed to start VPN: \(error.localizedDescription)",
-                                    details: nil))
-                stopTimer()
-                return
+                await MainActor.run {
+                    self.isStarting = false
+                    result(FlutterError(code: "VPN_ERROR",
+                                        message: "Failed to start VPN: \(error.localizedDescription)",
+                                        details: nil))
+                }
             }
         }
-        startTimer()
     }
     
     private func requestPermission(result: @escaping FlutterResult) {
@@ -186,13 +210,59 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             self.appName = bundleName
         }
         
-        self.packetTunnelManager = PacketTunnelManager(providerBundleIdentifier: "\(providerBundleIdentifier).XrayTunnel", groupIdentifier: groupIdentifier, appName: appName)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if self.packetTunnelManager?.connectedDate != nil{
-                self.startTimer()
+        let manager = PacketTunnelManager(providerBundleIdentifier: "\(providerBundleIdentifier).XrayTunnel", groupIdentifier: groupIdentifier, appName: appName)
+        self.packetTunnelManager = manager
+        
+        // Setup status observer
+        self.statusCancellable?.cancel()
+        self.statusCancellable = manager.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.handleStatusChange()
             }
+        
+        // Initial check
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.handleStatusChange()
         }
+        
         result(nil)
+    }
+    
+    private func handleStatusChange() {
+        guard let status = self.packetTunnelManager?.status else { return }
+        
+        let statusString: String
+        switch status {
+        case .connected:
+            statusString = "CONNECTED"
+            if timer == nil {
+                startTimer()
+            }
+        case .connecting:
+            statusString = "CONNECTING"
+            if timer == nil {
+                startTimer()
+            }
+        case .disconnecting:
+            statusString = "DISCONNECTING"
+            if timer == nil {
+                startTimer()
+            }
+        case .disconnected, .invalid:
+            statusString = "DISCONNECTED"
+            stopTimer()
+            // Send one last event to ensure UI shows DISCONNECTED
+            self.eventSink?(["0", "0", "0", "0", "0", "DISCONNECTED"])
+        case .reasserting:
+            statusString = "CONNECTING"
+        @unknown default:
+            statusString = "DISCONNECTED"
+        }
+        
+        self.lastStatus = statusString
+        print("VPN Status Changed: \(statusString)")
     }
     
     private func handleStatusChange() {

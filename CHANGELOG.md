@@ -1,3 +1,11 @@
+## 1.0.17
+
+### Critical Bug Fixes
+- **iOS: Fixed Connection Race Condition**
+  - Refactored state management to use native `NEVPNStatus` observers.
+  - Fixes issue where VPN would get stuck in 'CONNECTED' state with 0 duration during rapid toggling.
+  - Added `isStarting` guard to prevent concurrent startup tasks.
+
 ## 1.0.16
 
 ### Critical Bug Fixes
