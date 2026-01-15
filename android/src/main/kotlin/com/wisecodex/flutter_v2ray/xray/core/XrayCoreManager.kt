@@ -412,9 +412,14 @@ object XrayCoreManager {
             .setContentTitle(config.REMARK)
             .setContentText("Connected")
             .setContentIntent(contentPendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)  // Changed from PRIORITY_MIN
             .setOngoing(true)
             .setShowWhen(true)
+        
+        // Android 12+ (API 31): Show notification immediately instead of 10-second delay
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
 
         // Conditionally add disconnect button based on config
         if (config.SHOW_NOTIFICATION_DISCONNECT_BUTTON) {

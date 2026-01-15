@@ -63,17 +63,24 @@ class XrayVPNService : VpnService() {
         val notification = createNotification("VPN Service Running")
         
         try {
-            val foregroundServiceType = if (Build.VERSION.SDK_INT >= 34) {
-                FOREGROUND_SERVICE_TYPE_SPECIAL_USE // 32
-            } else null
-            
-            if (foregroundServiceType != null) {
-                startForeground(NOTIFICATION_ID, notification, foregroundServiceType)
+            if (Build.VERSION.SDK_INT >= 34) {
+                // Android 14+ requires foreground service type
+                startForeground(NOTIFICATION_ID, notification, FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
+            Log.d(TAG, "Foreground service started successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start foreground service", e)
+            Log.e(TAG, "Failed to start foreground service with primary method", e)
+            // Fallback: try without service type for older behavior
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+                Log.d(TAG, "Foreground service started with fallback method")
+            } catch (fallbackException: Exception) {
+                Log.e(TAG, "Fallback foreground service also failed", fallbackException)
+                // Last resort: stop the service to prevent ANR/crash
+                stopSelf()
+            }
         }
     }
 
@@ -477,13 +484,20 @@ class XrayVPNService : VpnService() {
         }
         
         // Use a default icon if not set
-        var icon = android.R.drawable.ic_dialog_info
+        val icon = android.R.drawable.ic_dialog_info
         
-        return builder
+        builder
             .setContentTitle("VPN Service")
             .setContentText(content)
             .setSmallIcon(icon)
-            .build()
+            .setOngoing(true)
+        
+        // Android 12+ (API 31): Show notification immediately instead of 10-second delay
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(android.app.Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+        
+        return builder.build()
     }
 
     // MARK: - Companion Object

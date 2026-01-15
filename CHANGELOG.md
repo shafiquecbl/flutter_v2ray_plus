@@ -1,3 +1,15 @@
+## 1.0.16
+
+### Critical Bug Fixes
+- **Android: Fixed BackgroundServiceStartNotAllowedException**
+  - Uses `stopService()` for cleanup which is always allowed, even when app is in background.
+- **Android: Fixed ForegroundServiceDidNotStartInTimeException**
+  - Added robust fallback mechanism and error handling in `XrayVPNService`.
+  - Ensures `startForeground()` is called reliably to prevent Android system timeouts.
+- **Android: Fixed Notification Delay**
+  - Added `FOREGROUND_SERVICE_IMMEDIATE` behavior for Android 12+.
+  - Notifications now show instantly instead of with a 10-second delay.
+
 ## 1.0.15
 
 ### Critical Bug Fixes

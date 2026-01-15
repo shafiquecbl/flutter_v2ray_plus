@@ -169,11 +169,21 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
     }
 
     private fun handleStopVless(result: MethodChannel.Result) {
-        Intent(context, XrayVPNService::class.java).apply {
-            putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE)
-        }.also { context.startService(it) }
         
-        result.success(null)
+        // Intent(context, XrayVPNService::class.java).apply {
+        //     putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE)
+        // }.also { context.startService(it) }
+        
+        try {
+            // Use stopService() instead of startService() with STOP_SERVICE command
+            // This avoids BackgroundServiceStartNotAllowedException on Android 12+
+            // when the app is in background
+            context.stopService(Intent(context, XrayVPNService::class.java))
+            result.success(null)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to stop VPN service", e)
+            result.error("STOP_SERVICE_FAILED", e.message, null)
+        }
     }
 
     private fun handleInitialize(call: MethodCall, result: MethodChannel.Result) {
