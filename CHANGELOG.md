@@ -1,3 +1,11 @@
+## 1.0.18
+
+### Critical Bug Fixes
+- **Android: Fixed VPN Disconnect Issue**
+  - Re-implemented command-based service stop for cleaner resource cleanup.
+  - Added robust fallback to `stopService()` if background start restrictions apply.
+  - Optimized service lifecycle to prevent unnecessary foregrounding during shutdown.
+
 ## 1.0.17
 
 ### Critical Bug Fixes

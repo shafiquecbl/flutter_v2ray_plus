@@ -39,13 +39,20 @@ class XrayVPNService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent ?: return START_NOT_STICKY.also { stopSelf() }
 
-        startForegroundService()
-
         val command = extractCommand(intent)
         when (command) {
-            AppConfigs.V2RAY_SERVICE_COMMANDS.START_SERVICE -> handleStartCommand(intent)
-            AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE -> stopAll()
-            else -> Log.w(TAG, "Unknown command received")
+            AppConfigs.V2RAY_SERVICE_COMMANDS.START_SERVICE -> {
+                startForegroundService()
+                handleStartCommand(intent)
+            }
+            AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE -> {
+                stopAll()
+                return START_NOT_STICKY
+            }
+            else -> {
+                startForegroundService() // Ensure foreground for state sync if needed
+                Log.w(TAG, "Unknown command received")
+            }
         }
 
         return START_STICKY
