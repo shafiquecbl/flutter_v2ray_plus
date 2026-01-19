@@ -49,6 +49,13 @@ class XrayVPNService : VpnService() {
                 stopAll()
                 return START_NOT_STICKY
             }
+            AppConfigs.V2RAY_SERVICE_COMMANDS.UPDATE_AUTO_DISCONNECT -> {
+                val seconds = intent.getIntExtra("ADDITIONAL_SECONDS", 0)
+                if (seconds > 0) {
+                    XrayCoreManager.updateAutoDisconnectTime(this, seconds)
+                }
+                return START_STICKY
+            }
             else -> {
                 startForegroundService() // Ensure foreground for state sync if needed
                 Log.w(TAG, "Unknown command received")

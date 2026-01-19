@@ -132,6 +132,14 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
         DNS_SERVERS = call.argument<ArrayList<String>>("dns_servers")
         NOTIFICATION_DISCONNECT_BUTTON_NAME = call.argument("notificationDisconnectButtonName") ?: DEFAULT_DISCONNECT_BUTTON_TEXT
         
+        try {
+            val pm = context.packageManager
+            val appInfo = context.applicationInfo
+            APPLICATION_NAME = pm.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            APPLICATION_NAME = "V2Ray VPN"
+        }
+        
         // Parse auto-disconnect configuration
         val autoDisconnect = call.argument<Map<String, Any?>>("auto_disconnect")
         if (autoDisconnect != null) {
@@ -287,7 +295,7 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
 
     private fun handleUpdateAutoDisconnectTime(call: MethodCall, result: MethodChannel.Result) {
         val additionalSeconds = call.argument<Int>("additional_seconds") ?: 0
-        val newTime = XrayCoreManager.updateAutoDisconnectTime(additionalSeconds)
+        val newTime = XrayCoreManager.updateAutoDisconnectTime(context, additionalSeconds)
         result.success(newTime)
     }
 

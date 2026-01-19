@@ -1,3 +1,8 @@
+## 1.1.1
+- Fix Android: Auto-disconnect time update failing due to process isolation.
+- Fix Android: Notification displaying default "Flutter Vless" instead of Application Name.
+- Android: Implemented IPC for reliable service communication.
+
 ## 1.1.0
 
 ### New Features

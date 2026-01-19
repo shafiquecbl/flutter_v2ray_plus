@@ -19,7 +19,7 @@ object AppConfigs {
      * Commands sent to the XrayVPNService via Intent.
      */
     enum class V2RAY_SERVICE_COMMANDS : Serializable {
-        START_SERVICE, STOP_SERVICE, RESTART_SERVICE
+        START_SERVICE, STOP_SERVICE, RESTART_SERVICE, UPDATE_AUTO_DISCONNECT
     }
 
     /**

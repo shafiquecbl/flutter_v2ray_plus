@@ -419,14 +419,50 @@ object XrayCoreManager {
      * Updates remaining auto-disconnect time (e.g., after watching an ad).
      * @return New remaining time in seconds, or -1 if auto-disconnect not active
      */
-    fun updateAutoDisconnectTime(additionalSeconds: Int): Int {
-        if (!autoDisconnectEnabled || remainingAutoDisconnectSeconds < 0) {
+    /**
+     * Updates remaining auto-disconnect time (e.g., after watching an ad).
+     * Handles cross-process communication if called from App Process.
+     * @return New remaining time in seconds, or -1 if update sent async or failed
+     */
+    fun updateAutoDisconnectTime(context: Context, additionalSeconds: Int): Int {
+        // CASE 1: Active Service Process (Timer running)
+        if (serviceContext != null) {
+            if (!autoDisconnectEnabled || remainingAutoDisconnectSeconds < 0) {
+                return -1
+            }
+            remainingAutoDisconnectSeconds += additionalSeconds
+            if (remainingAutoDisconnectSeconds < 0) remainingAutoDisconnectSeconds = 0
+            Log.d(TAG, "Auto-disconnect time updated: ${remainingAutoDisconnectSeconds}s remaining")
+            
+            // Update notification to show new remaining time
+            val config = AppConfigs.V2RAY_CONFIG
+            if (config != null) {
+                updateNotificationWithRemainingTime(context, config)
+            }
+            
+            return remainingAutoDisconnectSeconds
+        }
+        
+        // CASE 2: Service Process but timer not started (called from onStartCommand before VPN ready)
+        // Check exact class matching to avoid instanceof inheritance issues, though unlikely for Service
+        if (context.javaClass.name == XrayVPNService::class.java.name) {
+            Log.w(TAG, "Update called in Service before timer started")
             return -1
         }
-        remainingAutoDisconnectSeconds += additionalSeconds
-        if (remainingAutoDisconnectSeconds < 0) remainingAutoDisconnectSeconds = 0
-        Log.d(TAG, "Auto-disconnect time updated: ${remainingAutoDisconnectSeconds}s remaining")
-        return remainingAutoDisconnectSeconds
+        
+        // CASE 3: App Process (sending command to service)
+        return try {
+            val intent = Intent(context, XrayVPNService::class.java).apply {
+                putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.UPDATE_AUTO_DISCONNECT)
+                putExtra("ADDITIONAL_SECONDS", additionalSeconds)
+            }
+            context.startService(intent)
+            Log.d(TAG, "Sent UPDATE_AUTO_DISCONNECT command to service")
+            -1 // Return -1 as we don't know the result synchronously
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send update command to service", e)
+            -1
+        }
     }
     
     /**
