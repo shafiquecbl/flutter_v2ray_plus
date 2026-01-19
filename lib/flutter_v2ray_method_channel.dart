@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'flutter_v2ray_platform_interface.dart';
+import 'model/auto_disconnect.dart';
 import 'model/vless_status.dart';
 
 /// An implementation of [FlutterV2rayPlatform] that uses method channels.
@@ -38,6 +39,7 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
     List<String>? dnsServers,
     bool proxyOnly = false,
     bool showNotificationDisconnectButton = true,
+    AutoDisconnect? autoDisconnect,
   }) async {
     await methodChannel.invokeMethod('startVless', {
       "remark": remark,
@@ -48,6 +50,7 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
       "proxy_only": proxyOnly,
       "notificationDisconnectButtonName": notificationDisconnectButtonName,
       "showNotificationDisconnectButton": showNotificationDisconnectButton,
+      "auto_disconnect": autoDisconnect?.toMap(),
     });
   }
 
@@ -85,6 +88,33 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
   }
 
   @override
+  Future<int> updateAutoDisconnectTime(int additionalSeconds) async {
+    return await methodChannel.invokeMethod('updateAutoDisconnectTime', {
+      "additional_seconds": additionalSeconds,
+    }) ?? -1;
+  }
+
+  @override
+  Future<int> getRemainingAutoDisconnectTime() async {
+    return await methodChannel.invokeMethod('getRemainingAutoDisconnectTime') ?? -1;
+  }
+
+  @override
+  Future<void> cancelAutoDisconnect() async {
+    await methodChannel.invokeMethod('cancelAutoDisconnect');
+  }
+
+  @override
+  Future<bool> wasAutoDisconnected() async {
+    return await methodChannel.invokeMethod('wasAutoDisconnected') ?? false;
+  }
+
+  @override
+  Future<void> clearAutoDisconnectFlag() async {
+    await methodChannel.invokeMethod('clearAutoDisconnectFlag');
+  }
+
+  @override
   Stream<VlessStatus> get onStatusChanged {
     return eventChannel.receiveBroadcastStream().map(
       (event) => VlessStatus(
@@ -94,7 +124,11 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
         upload: int.parse(event[3]),
         download: int.parse(event[4]),
         state: event[5],
+        remainingTime: event.length > 6 && event[6] != null
+            ? int.tryParse(event[6].toString())
+            : null,
       ),
     );
   }
 }
+

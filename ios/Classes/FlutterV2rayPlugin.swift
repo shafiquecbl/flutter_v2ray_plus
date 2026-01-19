@@ -52,9 +52,10 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
                 
                 Task {
                     do {
-                        let response = try await self.packetTunnelManager?.sendProviderMessage(data: "xray_traffic".data(using: .utf8)!)
-                        if let response = response {
-                            let traffic = String(decoding: response, as: UTF8.self)
+                        // Get traffic stats
+                        let trafficResponse = try await self.packetTunnelManager?.sendProviderMessage(data: "xray_traffic".data(using: .utf8)!)
+                        if let trafficResponse = trafficResponse {
+                            let traffic = String(decoding: trafficResponse, as: UTF8.self)
                             let parts = traffic.split(separator: ",")
                             if parts.count >= 2, let up = Int(parts[0]), let down = Int(parts[1]) {
                                 await MainActor.run {
@@ -65,13 +66,30 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
                                 }
                             }
                         }
+                        
+                        // Get remaining auto-disconnect time from extension
+                        let remainingResponse = try await self.packetTunnelManager?.sendProviderMessage(data: "auto_disconnect_remaining".data(using: .utf8)!)
+                        var remainingTimeStr: String? = nil
+                        if let remainingResponse = remainingResponse {
+                            let remaining = String(decoding: remainingResponse, as: UTF8.self)
+                            if let remainingInt = Int(remaining), remainingInt >= 0 {
+                                remainingTimeStr = remaining
+                            }
+                        }
+                        
+                        await MainActor.run {
+                            self.eventSink?(["\(seconds)", "\(self.uploadSpeed)", "\(self.downloadSpeed)", "\(self.totalUpload)", "\(self.totalDownload)", status, remainingTimeStr as Any])
+                        }
                     } catch {
-                        print("Error in traffic: \(error.localizedDescription)")
+                        print("Error in timer: \(error.localizedDescription)")
+                        await MainActor.run {
+                            self.eventSink?(["\(seconds)", "\(self.uploadSpeed)", "\(self.downloadSpeed)", "\(self.totalUpload)", "\(self.totalDownload)", status, NSNull()])
+                        }
                     }
                 }
+            } else {
+                self.eventSink?(["\(seconds)", "\(self.uploadSpeed)", "\(self.downloadSpeed)", "\(self.totalUpload)", "\(self.totalDownload)", status, NSNull()])
             }
-            
-            self.eventSink?(["\(seconds)", "\(self.uploadSpeed)", "\(self.downloadSpeed)", "\(self.totalUpload)", "\(self.totalDownload)", status])
         })
     }
     
@@ -101,6 +119,16 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             getConnectedServerDelay(call: call, result: result)
         case "getServerDelay":
             getServerDelay(call: call, result: result)
+        case "updateAutoDisconnectTime":
+            updateAutoDisconnectTime(call: call, result: result)
+        case "getRemainingAutoDisconnectTime":
+            getRemainingAutoDisconnectTime(result: result)
+        case "cancelAutoDisconnect":
+            cancelAutoDisconnect(result: result)
+        case "wasAutoDisconnected":
+            wasAutoDisconnected(result: result)
+        case "clearAutoDisconnectFlag":
+            clearAutoDisconnectFlag(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -158,9 +186,20 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         }
         let dnsServers = arguments["dns_servers"] as? [String]
         
+        // Parse auto-disconnect configuration for extension
+        let autoDisconnect = arguments["auto_disconnect"] as? [String: Any]
+        
+        // Configure AutoDisconnectHelper with developer's settings
+        AutoDisconnectHelper.shared.configure(
+            groupIdentifier: packetTunnelManager?.groupIdentifier,
+            appName: appName,
+            expiredMessage: autoDisconnect?["expiredNotificationMessage"] as? String
+        )
+        
         packetTunnelManager?.remark = remark
         packetTunnelManager?.xrayConfig = configData
         packetTunnelManager?.dnsServers = dnsServers
+        packetTunnelManager?.autoDisconnect = autoDisconnect
         
         isStarting = true
         Task {
@@ -251,10 +290,13 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
                 startTimer()
             }
         case .disconnected, .invalid:
-            statusString = "DISCONNECTED"
             stopTimer()
-            // Send one last event to ensure UI shows DISCONNECTED
-            self.eventSink?(["0", "0", "0", "0", "0", "DISCONNECTED"])
+            // Use AutoDisconnectHelper to check and handle auto-disconnect
+            let adjustedStatus = AutoDisconnectHelper.shared.checkAndHandleDisconnect(currentStatus: "DISCONNECTED")
+            statusString = adjustedStatus
+            
+            // Send event to Flutter
+            self.eventSink?(["0", "0", "0", "0", "0", statusString, NSNull()])
         case .reasserting:
             statusString = "CONNECTING"
         @unknown default:
@@ -264,196 +306,27 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         self.lastStatus = statusString
         print("VPN Status Changed: \(statusString)")
     }
-}
-final class PacketTunnelManager: ObservableObject {
-    var providerBundleIdentifier: String?
-    var groupIdentifier: String?
-    var appName: String = "VPN"
-    var remark: String = "Xray"
-    var xrayConfig: Data = "".data(using: .utf8)!
-    var dnsServers: [String]?
     
-    private var cancellables: Set<AnyCancellable> = []
+    // MARK: - Auto-Disconnect Methods (delegated to AutoDisconnectHelper)
     
-    @Published private var manager: NETunnelProviderManager?
-    
-    @Published private(set) var isProcessing: Bool = false
-    
-    var status: NEVPNStatus? {
-        manager.flatMap { $0.connection.status }
+    private func updateAutoDisconnectTime(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        AutoDisconnectHelper.shared.updateTime(call: call, packetTunnelManager: packetTunnelManager, result: result)
     }
     
-    var connectedDate: Date? {
-        manager.flatMap { $0.connection.connectedDate }
+    private func getRemainingAutoDisconnectTime(result: @escaping FlutterResult) {
+        AutoDisconnectHelper.shared.getRemainingTime(packetTunnelManager: packetTunnelManager, result: result)
     }
     
-    init(providerBundleIdentifier: String, groupIdentifier: String, appName: String = "VPN") {
-        self.providerBundleIdentifier = providerBundleIdentifier
-        self.groupIdentifier = groupIdentifier
-        self.appName = appName
-        isProcessing = true
-        Task(priority: .userInitiated) {
-            await self.reload()
-            await MainActor.run {
-                self.isProcessing = false
-            }
-        }
+    private func cancelAutoDisconnect(result: @escaping FlutterResult) {
+        AutoDisconnectHelper.shared.cancel(packetTunnelManager: packetTunnelManager, result: result)
     }
     
-    
-    func reload() async {
-        self.cancellables.removeAll()
-        self.manager = await self.loadTunnelProviderManager()
-        NotificationCenter.default
-            .publisher(for: .NEVPNConfigurationChange, object: nil)
-            .receive(on: DispatchQueue.main)
-            .sink { [unowned self] _ in
-                Task(priority: .high) {
-                    self.manager = await self.loadTunnelProviderManager()
-                }
-            }
-            .store(in: &cancellables)
-        NotificationCenter.default
-            .publisher(for: .NEVPNStatusDidChange)
-            .receive(on: DispatchQueue.main)
-            .sink { [unowned self] _ in objectWillChange.send() }
-            .store(in: &cancellables)
+    private func wasAutoDisconnected(result: @escaping FlutterResult) {
+        AutoDisconnectHelper.shared.handleWasAutoDisconnected(result: result)
     }
     
-    func saveToPreferences() async throws {
-        guard let providerBundleIdentifier = providerBundleIdentifier else {
-            throw NSError(domain: "VPN", code: 1, userInfo: [NSLocalizedDescriptionKey: "Provider bundle identifier is missing."])
-        }
-        
-        do {
-            // Load ALL existing managers to check if one already exists
-            let allManagers = try await NETunnelProviderManager.loadAllFromPreferences()
-            
-            // Find ANY manager with our providerBundleIdentifier (created by vpn_permission or us)
-            let existingManager = allManagers.first(where: {
-                guard let configuration = $0.protocolConfiguration as? NETunnelProviderProtocol else {
-                    return false
-                }
-                return configuration.providerBundleIdentifier == providerBundleIdentifier
-            })
-            
-            // Reuse existing manager (from vpn_permission) or create new one
-            let manager = existingManager ?? self.manager ?? NETunnelProviderManager()
-            manager.localizedDescription = appName
-            manager.protocolConfiguration = {
-                let configuration = NETunnelProviderProtocol()
-                configuration.providerBundleIdentifier = providerBundleIdentifier
-                configuration.serverAddress = "Xray"
-                configuration.providerConfiguration = [
-                    "xrayConfig": xrayConfig,
-                    "dnsServers": dnsServers ?? []
-                ]
-                if #available(iOS 14.2, *) {
-                    configuration.excludeLocalNetworks = true
-                } else {
-                    // Fallback on earlier versions
-                }
-                return configuration
-            }()
-            manager.isEnabled = true
-            try await manager.saveToPreferences()
-            
-            await self.reload()
-        } catch {
-            print("Error saving VPN preferences: \\(error.localizedDescription)")
-            throw error
-        }
-    }
-    
-    func removeFromPreferences() async throws {
-        guard let manager = manager else {
-            return
-        }
-        try await manager.removeFromPreferences()
-    }
-    
-    func start() async throws {
-        guard let manager = manager else {
-            throw NSError(domain: "VPN", code: 1, userInfo: [NSLocalizedDescriptionKey: "Manager not found"])
-        }
-        
-        if !manager.isEnabled {
-            manager.isEnabled = true
-            try await manager.saveToPreferences()
-        }
-        
-        do {
-            // Assuming you have a manager instance of NETunnelProviderManager
-            try  manager.connection.startVPNTunnel()
-        } catch {
-            print("Failed to start VPN tunnel: \(error.localizedDescription)")
-        }
-    }
-    
-    func stop() {
-        guard let manager = manager else {
-            return
-        }
-        manager.connection.stopVPNTunnel()
-    }
-    
-    @discardableResult
-    func sendProviderMessage(data: Data) async throws -> Data? {
-        guard let manager = manager else {
-            return nil
-        }
-        
-        guard let session = manager.connection as? NETunnelProviderSession else {
-            throw NSError(domain: "VPN", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid connection type"])
-        }
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            do {
-                try session.sendProviderMessage(data) { response in
-                    continuation.resume(with: .success(response))
-                }
-            } catch {
-                continuation.resume(with: .failure(error))
-            }
-        }
-    }
-    
-    func testSaveAndLoadProfile() async -> Bool{
-        do {
-            try await saveToPreferences()
-            
-            // Now reload the manager after saving
-            let _ = await loadTunnelProviderManager()
-            return true
-            
-        } catch {
-            print("Error during save and load test: \(error.localizedDescription)")
-            return false
-        }
-    }
-    
-    
-    private func loadTunnelProviderManager() async -> NETunnelProviderManager? {
-        do {
-            let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-            
-            
-            guard let reval = managers.first(where: {
-                guard let configuration = $0.protocolConfiguration as? NETunnelProviderProtocol else {
-                    return false
-                }
-                return configuration.providerBundleIdentifier == providerBundleIdentifier
-            }) else {
-                return nil
-            }
-            
-            try await reval.loadFromPreferences()
-            return reval
-        } catch {
-            print("Error loading tunnel provider manager: \(error.localizedDescription)")
-            return nil
-        }
+    private func clearAutoDisconnectFlag(result: @escaping FlutterResult) {
+        AutoDisconnectHelper.shared.handleClearFlag(result: result)
     }
 }
-
 

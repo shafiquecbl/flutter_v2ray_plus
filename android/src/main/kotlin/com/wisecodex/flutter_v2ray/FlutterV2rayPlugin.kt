@@ -95,6 +95,11 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
             "getConnectedServerDelay" -> handleGetConnectedServerDelay(call, result)
             "getCoreVersion" -> handleGetCoreVersion(result)
             "requestPermission" -> handleRequestPermission(result)
+            "updateAutoDisconnectTime" -> handleUpdateAutoDisconnectTime(call, result)
+            "getRemainingAutoDisconnectTime" -> handleGetRemainingAutoDisconnectTime(result)
+            "cancelAutoDisconnect" -> handleCancelAutoDisconnect(result)
+            "wasAutoDisconnected" -> handleWasAutoDisconnected(result)
+            "clearAutoDisconnectFlag" -> handleClearAutoDisconnectFlag(result)
             else -> result.notImplemented()
         }
     }
@@ -126,6 +131,17 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
         BYPASS_SUBNETS = call.argument<ArrayList<String>>("bypass_subnets") ?: ArrayList()
         DNS_SERVERS = call.argument<ArrayList<String>>("dns_servers")
         NOTIFICATION_DISCONNECT_BUTTON_NAME = call.argument("notificationDisconnectButtonName") ?: DEFAULT_DISCONNECT_BUTTON_TEXT
+        
+        // Parse auto-disconnect configuration
+        val autoDisconnect = call.argument<Map<String, Any?>>("auto_disconnect")
+        if (autoDisconnect != null) {
+            AUTO_DISCONNECT_DURATION = (autoDisconnect["duration"] as? Int) ?: 0
+            AUTO_DISCONNECT_SHOW_IN_NOTIFICATION = (autoDisconnect["showRemainingTimeInNotification"] as? Boolean) ?: true
+            AUTO_DISCONNECT_TIME_FORMAT = (autoDisconnect["timeFormat"] as? Int) ?: 0
+            AUTO_DISCONNECT_ON_EXPIRE = (autoDisconnect["onExpire"] as? Int) ?: 1
+            AUTO_DISCONNECT_EXPIRED_MESSAGE = (autoDisconnect["expiredNotificationMessage"] as? String) 
+                ?: "Free time expired - VPN disconnected"
+        }
         
         if (AppConfigs.NOTIFICATION_ICON_RESOURCE_NAME.isNotEmpty() && 
             AppConfigs.NOTIFICATION_ICON_RESOURCE_TYPE.isNotEmpty()) {
@@ -267,6 +283,34 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
         } ?: result.error("NO_ACTIVITY", "Activity is null", null)
     }
 
+    // MARK: - Auto-Disconnect Method Handlers
+
+    private fun handleUpdateAutoDisconnectTime(call: MethodCall, result: MethodChannel.Result) {
+        val additionalSeconds = call.argument<Int>("additional_seconds") ?: 0
+        val newTime = XrayCoreManager.updateAutoDisconnectTime(additionalSeconds)
+        result.success(newTime)
+    }
+
+    private fun handleGetRemainingAutoDisconnectTime(result: MethodChannel.Result) {
+        val remaining = XrayCoreManager.getRemainingAutoDisconnectTime()
+        result.success(remaining)
+    }
+
+    private fun handleCancelAutoDisconnect(result: MethodChannel.Result) {
+        XrayCoreManager.cancelAutoDisconnect()
+        result.success(null)
+    }
+
+    private fun handleWasAutoDisconnected(result: MethodChannel.Result) {
+        val wasExpired = context?.let { XrayCoreManager.wasAutoDisconnected(it) } ?: false
+        result.success(wasExpired)
+    }
+
+    private fun handleClearAutoDisconnectFlag(result: MethodChannel.Result) {
+        context?.let { XrayCoreManager.clearAutoDisconnectFlag(it) }
+        result.success(null)
+    }
+
     // MARK: - Broadcast Receiver
 
     private fun registerReceiver() {
@@ -292,6 +336,7 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
             val stateName = when (state) {
                 AppConfigs.V2RAY_STATES.V2RAY_CONNECTED -> "CONNECTED"
                 AppConfigs.V2RAY_STATES.V2RAY_CONNECTING -> "CONNECTING"
+                AppConfigs.V2RAY_STATES.V2RAY_AUTO_DISCONNECTED -> "AUTO_DISCONNECTED"
                 else -> "DISCONNECTED"
             }
 
@@ -301,7 +346,8 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
                 intent.getLongExtra("DOWNLOAD_SPEED", 0).toString(),
                 intent.getLongExtra("UPLOAD_TRAFFIC", 0).toString(),
                 intent.getLongExtra("DOWNLOAD_TRAFFIC", 0).toString(),
-                stateName
+                stateName,
+                intent.getStringExtra("REMAINING_TIME") // Can be null if auto-disconnect not active
             )
 
             vpnStatusSink?.success(data)

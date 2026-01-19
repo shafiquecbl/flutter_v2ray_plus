@@ -8,6 +8,7 @@
 import 'dart:convert';
 
 import 'flutter_v2ray_platform_interface.dart';
+import 'model/auto_disconnect.dart';
 import 'model/vless_status.dart';
 import 'url/shadowsocks.dart';
 import 'url/socks.dart';
@@ -15,6 +16,9 @@ import 'url/trojan.dart';
 import 'url/url.dart';
 import 'url/vless.dart';
 import 'url/vmess.dart';
+
+export 'model/auto_disconnect.dart';
+export 'model/vless_status.dart';
 
 class FlutterV2ray {
   FlutterV2ray();
@@ -84,6 +88,21 @@ class FlutterV2ray {
   ///   Whether to show the disconnect button in the notification.
   ///
   ///   Default: true
+  ///
+  /// autoDisconnect:
+  ///
+  ///   Configuration for automatic VPN disconnection after a specified duration.
+  ///
+  ///   Useful for free-time VPN apps. The VPN will disconnect even if the app is killed.
+  ///
+  ///   Example:
+  ///   ```dart
+  ///   autoDisconnect: AutoDisconnect(
+  ///     duration: 30 * 60, // 30 minutes
+  ///     onExpire: OnExpireBehavior.disconnectWithNotification,
+  ///     expiredNotificationMessage: "Your free VPN time has expired",
+  ///   ),
+  ///   ```
   Future<void> startVless({
     required String remark,
     required String config,
@@ -93,6 +112,7 @@ class FlutterV2ray {
     bool proxyOnly = false,
     String notificationDisconnectButtonName = "DISCONNECT",
     bool showNotificationDisconnectButton = true,
+    AutoDisconnect? autoDisconnect,
   }) async {
     try {
       if (jsonDecode(config) == null) {
@@ -111,6 +131,7 @@ class FlutterV2ray {
       dnsServers: dnsServers,
       notificationDisconnectButtonName: notificationDisconnectButtonName,
       showNotificationDisconnectButton: showNotificationDisconnectButton,
+      autoDisconnect: autoDisconnect,
     );
   }
 
@@ -149,6 +170,59 @@ class FlutterV2ray {
     return await FlutterV2rayPlatform.instance.getCoreVersion();
   }
 
+  /// Adds or subtracts time from auto-disconnect (e.g., after watching an ad).
+  ///
+  /// Returns the new remaining time in seconds, or -1 if auto-disconnect is not active.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Add 10 minutes after user watches ad
+  /// final newTime = await flutterV2ray.updateAutoDisconnectTime(10 * 60);
+  /// ```
+  Future<int> updateAutoDisconnectTime(int additionalSeconds) async {
+    return await FlutterV2rayPlatform.instance
+        .updateAutoDisconnectTime(additionalSeconds);
+  }
+
+  /// Gets the current remaining auto-disconnect time in seconds.
+  ///
+  /// Returns -1 if auto-disconnect is not active.
+  Future<int> getRemainingAutoDisconnectTime() async {
+    return await FlutterV2rayPlatform.instance.getRemainingAutoDisconnectTime();
+  }
+
+  /// Cancels auto-disconnect - VPN stays connected indefinitely.
+  ///
+  /// Useful when user upgrades to premium.
+  Future<void> cancelAutoDisconnect() async {
+    await FlutterV2rayPlatform.instance.cancelAutoDisconnect();
+  }
+
+  /// Checks if VPN was auto-disconnected while app was killed.
+  ///
+  /// Returns true if auto-disconnect expired while app was in background/killed.
+  /// Use this on app startup to show "session expired" message.
+  ///
+  /// Example:
+  /// ```dart
+  /// // On app startup
+  /// final wasExpired = await flutterV2ray.wasAutoDisconnected();
+  /// if (wasExpired) {
+  ///   showDialog("Your free time expired");
+  ///   await flutterV2ray.clearAutoDisconnectFlag();
+  /// }
+  /// ```
+  Future<bool> wasAutoDisconnected() async {
+    return await FlutterV2rayPlatform.instance.wasAutoDisconnected();
+  }
+
+  /// Clears the auto-disconnect expired flag.
+  ///
+  /// Should be called after app has handled the expired state (shown dialog, etc.)
+  Future<void> clearAutoDisconnectFlag() async {
+    await FlutterV2rayPlatform.instance.clearAutoDisconnectFlag();
+  }
+
   /// parse FlutterVlessURL object from Vless share link
   ///
   /// like vmess://, vless://, trojan://, ss://, socks://
@@ -173,3 +247,4 @@ class FlutterV2ray {
     return FlutterV2rayPlatform.instance.onStatusChanged;
   }
 }
+

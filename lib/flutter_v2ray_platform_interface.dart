@@ -1,6 +1,7 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'flutter_v2ray_method_channel.dart';
+import 'model/auto_disconnect.dart';
 import 'model/vless_status.dart';
 
 abstract class FlutterV2rayPlatform extends PlatformInterface {
@@ -49,6 +50,7 @@ abstract class FlutterV2rayPlatform extends PlatformInterface {
     List<String>? dnsServers,
     bool proxyOnly = false,
     bool showNotificationDisconnectButton = true,
+    AutoDisconnect? autoDisconnect,
   }) {
     throw UnimplementedError('startVless() has not been implemented.');
   }
@@ -75,7 +77,46 @@ abstract class FlutterV2rayPlatform extends PlatformInterface {
     throw UnimplementedError('getCoreVersion() has not been implemented.');
   }
 
+  /// Adds or subtracts time from auto-disconnect.
+  /// Returns the new remaining time in seconds, or -1 if auto-disconnect not active.
+  Future<int> updateAutoDisconnectTime(int additionalSeconds) {
+    throw UnimplementedError(
+      'updateAutoDisconnectTime() has not been implemented.',
+    );
+  }
+
+  /// Gets current remaining time in seconds, or -1 if auto-disconnect not active.
+  Future<int> getRemainingAutoDisconnectTime() {
+    throw UnimplementedError(
+      'getRemainingAutoDisconnectTime() has not been implemented.',
+    );
+  }
+
+  /// Cancels auto-disconnect - VPN stays connected indefinitely.
+  Future<void> cancelAutoDisconnect() {
+    throw UnimplementedError(
+      'cancelAutoDisconnect() has not been implemented.',
+    );
+  }
+
+  /// Checks if VPN was auto-disconnected while app was killed.
+  /// Returns true if auto-disconnect expired, false otherwise.
+  Future<bool> wasAutoDisconnected() {
+    throw UnimplementedError(
+      'wasAutoDisconnected() has not been implemented.',
+    );
+  }
+
+  /// Clears the auto-disconnect expired flag.
+  /// Should be called after app has handled the expired state.
+  Future<void> clearAutoDisconnectFlag() {
+    throw UnimplementedError(
+      'clearAutoDisconnectFlag() has not been implemented.',
+    );
+  }
+
   Stream<VlessStatus> get onStatusChanged {
     throw UnimplementedError('onStatusChanged() has not been implemented.');
   }
 }
+

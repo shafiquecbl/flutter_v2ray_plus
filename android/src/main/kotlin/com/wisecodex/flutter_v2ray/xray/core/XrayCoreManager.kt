@@ -42,6 +42,11 @@ object XrayCoreManager {
     private var xrayProcess: Process? = null
     private var countDownTimer: CountDownTimer? = null
     private var connectionDurationSeconds = 0
+    
+    // Auto-disconnect state
+    private var remainingAutoDisconnectSeconds = -1
+    private var autoDisconnectEnabled = false
+    private var serviceContext: Service? = null
 
     // MARK: - Core Lifecycle Management
 
@@ -288,10 +293,40 @@ object XrayCoreManager {
     private fun startTimer(context: Context) {
         countDownTimer?.cancel()
         connectionDurationSeconds = 0
+        serviceContext = context as? Service
+        
+        // Initialize auto-disconnect from config
+        val config = AppConfigs.V2RAY_CONFIG
+        if (config != null && config.AUTO_DISCONNECT_DURATION > 0) {
+            autoDisconnectEnabled = true
+            remainingAutoDisconnectSeconds = config.AUTO_DISCONNECT_DURATION
+            Log.d(TAG, "Auto-disconnect enabled: ${remainingAutoDisconnectSeconds}s")
+        } else {
+            autoDisconnectEnabled = false
+            remainingAutoDisconnectSeconds = -1
+        }
         
         countDownTimer = object : CountDownTimer(Long.MAX_VALUE, TIMER_INTERVAL_MS) {
             override fun onTick(millisUntilFinished: Long) {
                 connectionDurationSeconds++
+                
+                // Handle auto-disconnect countdown
+                if (autoDisconnectEnabled && remainingAutoDisconnectSeconds > 0) {
+                    remainingAutoDisconnectSeconds--
+                    
+                    // Update notification with remaining time
+                    val config = AppConfigs.V2RAY_CONFIG
+                    if (config != null && config.AUTO_DISCONNECT_SHOW_IN_NOTIFICATION) {
+                        updateNotificationWithRemainingTime(context, config)
+                    }
+                    
+                    // Check for expiry
+                    if (remainingAutoDisconnectSeconds <= 0) {
+                        handleAutoDisconnectExpiry(context)
+                        return
+                    }
+                }
+                
                 broadcastConnectionStatus(context)
             }
 
@@ -303,6 +338,9 @@ object XrayCoreManager {
         countDownTimer?.cancel()
         countDownTimer = null
         connectionDurationSeconds = 0
+        remainingAutoDisconnectSeconds = -1
+        autoDisconnectEnabled = false
+        serviceContext = null
     }
 
     private fun broadcastConnectionStatus(context: Context) {
@@ -315,6 +353,10 @@ object XrayCoreManager {
             putExtra("DOWNLOAD_SPEED", traffic[1])
             putExtra("UPLOAD_TRAFFIC", traffic[2])
             putExtra("DOWNLOAD_TRAFFIC", traffic[3])
+            // Add remaining auto-disconnect time
+            if (autoDisconnectEnabled && remainingAutoDisconnectSeconds >= 0) {
+                putExtra("REMAINING_TIME", remainingAutoDisconnectSeconds.toString())
+            }
         }.also { context.sendBroadcast(it) }
     }
 
@@ -369,6 +411,175 @@ object XrayCoreManager {
             
             longArrayOf(uplink, downlink, uplink, downlink)
         }.getOrDefault(ZERO_TRAFFIC)
+    }
+
+    // MARK: - Auto-Disconnect Management
+    
+    /**
+     * Updates remaining auto-disconnect time (e.g., after watching an ad).
+     * @return New remaining time in seconds, or -1 if auto-disconnect not active
+     */
+    fun updateAutoDisconnectTime(additionalSeconds: Int): Int {
+        if (!autoDisconnectEnabled || remainingAutoDisconnectSeconds < 0) {
+            return -1
+        }
+        remainingAutoDisconnectSeconds += additionalSeconds
+        if (remainingAutoDisconnectSeconds < 0) remainingAutoDisconnectSeconds = 0
+        Log.d(TAG, "Auto-disconnect time updated: ${remainingAutoDisconnectSeconds}s remaining")
+        return remainingAutoDisconnectSeconds
+    }
+    
+    /**
+     * Gets the current remaining auto-disconnect time.
+     * @return Remaining time in seconds, or -1 if auto-disconnect not active
+     */
+    fun getRemainingAutoDisconnectTime(): Int {
+        return if (autoDisconnectEnabled) remainingAutoDisconnectSeconds else -1
+    }
+    
+    /**
+     * Cancels auto-disconnect - VPN stays connected indefinitely.
+     */
+    fun cancelAutoDisconnect() {
+        autoDisconnectEnabled = false
+        remainingAutoDisconnectSeconds = -1
+        
+        // Update notification to remove remaining time
+        serviceContext?.let { context ->
+            val config = AppConfigs.V2RAY_CONFIG
+            if (config != null) {
+                showNotification(context, config)
+            }
+        }
+        Log.d(TAG, "Auto-disconnect cancelled")
+    }
+    
+    private fun handleAutoDisconnectExpiry(context: Context) {
+        Log.d(TAG, "Auto-disconnect time expired")
+        autoDisconnectEnabled = false
+        
+        val config = AppConfigs.V2RAY_CONFIG
+        
+        // Save flag to SharedPreferences so app can check on startup
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AUTO_DISCONNECT_EXPIRED, true)
+            .apply()
+        Log.d(TAG, "Auto-disconnect expired flag saved to SharedPreferences")
+        
+        // Send AUTO_DISCONNECTED state broadcast
+        Intent(AppConfigs.V2RAY_CONNECTION_INFO).apply {
+            putExtra("STATE", AppConfigs.V2RAY_STATES.V2RAY_AUTO_DISCONNECTED)
+            putExtra("DURATION", connectionDurationSeconds.toString())
+            putExtra("UPLOAD_SPEED", 0L)
+            putExtra("DOWNLOAD_SPEED", 0L)
+            putExtra("UPLOAD_TRAFFIC", 0L)
+            putExtra("DOWNLOAD_TRAFFIC", 0L)
+        }.also { context.sendBroadcast(it) }
+        
+        // Show expiry notification if configured
+        if (config != null && config.AUTO_DISCONNECT_ON_EXPIRE == 1) {
+            showExpiryNotification(context, config)
+        }
+        
+        // Stop VPN service properly by sending STOP_SERVICE command
+        val stopIntent = Intent(context, XrayVPNService::class.java).apply {
+            putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE)
+        }
+        context.startService(stopIntent)
+    }
+    
+    private fun showExpiryNotification(context: Context, config: XrayConfig) {
+        val channelId = createNotificationChannel(context, config.APPLICATION_NAME)
+        
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        launchIntent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val contentPendingIntent = PendingIntent.getActivity(context, 1, launchIntent, flags)
+        
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(config.APPLICATION_ICON)
+            .setContentTitle(config.APPLICATION_NAME)
+            .setContentText(config.AUTO_DISCONNECT_EXPIRED_MESSAGE)
+            .setContentIntent(contentPendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.notify(EXPIRY_NOTIFICATION_ID, notification)
+    }
+    
+    private fun updateNotificationWithRemainingTime(context: Context, config: XrayConfig) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
+        }
+        
+        val channelId = createNotificationChannel(context, config.APPLICATION_NAME)
+        val timeText = formatRemainingTime(remainingAutoDisconnectSeconds, config.AUTO_DISCONNECT_TIME_FORMAT)
+        
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        launchIntent?.action = "FROM_DISCONNECT_BTN"
+        launchIntent?.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val contentPendingIntent = PendingIntent.getActivity(context, 0, launchIntent, flags)
+        
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(config.APPLICATION_ICON)
+            .setContentTitle(config.REMARK)
+            .setContentText("Connected • $timeText remaining")
+            .setContentIntent(contentPendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(true)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+        
+        if (config.SHOW_NOTIFICATION_DISCONNECT_BUTTON) {
+            val stopIntent = Intent(context, XrayVPNService::class.java)
+            stopIntent.putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.STOP_SERVICE)
+            val stopPendingIntent = PendingIntent.getService(context, 0, stopIntent, flags)
+            builder.addAction(0, config.NOTIFICATION_DISCONNECT_BUTTON_NAME, stopPendingIntent)
+        }
+        
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.notify(NOTIFICATION_ID, builder.build())
+    }
+    
+    private fun formatRemainingTime(seconds: Int, format: Int): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        val secs = seconds % 60
+        
+        return if (format == 0) {
+            // withSeconds: "1h 30m 10s"
+            buildString {
+                if (hours > 0) append("${hours}h ")
+                if (minutes > 0 || hours > 0) append("${minutes}m ")
+                append("${secs}s")
+            }.trim()
+        } else {
+            // withoutSeconds: "1h 30m"
+            buildString {
+                if (hours > 0) append("${hours}h ")
+                append("${minutes}m")
+            }.trim().ifEmpty { "<1m" }
+        }
     }
 
     // MARK: - Broadcast Helpers
@@ -566,6 +777,7 @@ object XrayCoreManager {
     
     // Notification
     private const val NOTIFICATION_ID = 1
+    private const val EXPIRY_NOTIFICATION_ID = 2
     private const val NOTIFICATION_CHANNEL_ID = "XRAY_SERVICE_CHANNEL"
     
     // Configuration Files
@@ -590,4 +802,28 @@ object XrayCoreManager {
     private const val TEMP_XRAY_STARTUP_DELAY_MS = 1000L
     private const val CONNECTION_TIMEOUT_MS = 5000
     private const val READ_TIMEOUT_MS = 5000
+    
+    // SharedPreferences for auto-disconnect flag
+    private const val PREFS_NAME = "flutter_v2ray_prefs"
+    private const val KEY_AUTO_DISCONNECT_EXPIRED = "auto_disconnect_expired"
+    
+    /**
+     * Checks if VPN was auto-disconnected while app was killed.
+     * @return true if auto-disconnect expired, false otherwise
+     */
+    fun wasAutoDisconnected(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_DISCONNECT_EXPIRED, false)
+    }
+    
+    /**
+     * Clears the auto-disconnect expired flag.
+     * Should be called after app has handled the expired state.
+     */
+    fun clearAutoDisconnectFlag(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AUTO_DISCONNECT_EXPIRED, false)
+            .apply()
+    }
 }

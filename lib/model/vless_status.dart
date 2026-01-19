@@ -6,6 +6,9 @@ class VlessStatus {
   final int download;
   final String state;
 
+  /// Remaining auto-disconnect time in seconds, or null if disabled
+  final int? remainingTime;
+
   VlessStatus({
     this.duration = 0,
     this.uploadSpeed = 0,
@@ -13,5 +16,7 @@ class VlessStatus {
     this.upload = 0,
     this.download = 0,
     this.state = "DISCONNECTED",
+    this.remainingTime,
   });
 }
+

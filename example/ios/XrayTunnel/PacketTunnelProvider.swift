@@ -9,6 +9,7 @@ import NetworkExtension
 import XRay
 import Tun2SocksKit
 import os.log
+import UserNotifications
 
 /// Custom error types for better error handling
 enum TunnelError: Error {
@@ -17,12 +18,188 @@ enum TunnelError: Error {
     case invalidPort
 }
 
+// MARK: - Auto-Disconnect Manager
+
+/// Manages auto-disconnect timer functionality in the Network Extension.
+/// Runs independently of the main app and survives app termination.
+final class AutoDisconnectManager {
+    
+    // MARK: - Configuration
+    
+    struct Config {
+        let duration: Int
+        let showNotification: Bool
+        let timeFormat: Int  // 0 = withSeconds, 1 = withoutSeconds
+        let onExpire: Int    // 0 = silent, 1 = withNotification
+        let expiredMessage: String
+        let groupIdentifier: String?
+        
+        static func from(providerConfig: [String: Any]?) -> Config? {
+            guard let autoDisconnect = providerConfig?["autoDisconnect"] as? [String: Any],
+                  let duration = autoDisconnect["duration"] as? Int,
+                  duration > 0 else {
+                return nil
+            }
+            
+            return Config(
+                duration: duration,
+                showNotification: autoDisconnect["showRemainingTimeInNotification"] as? Bool ?? true,
+                timeFormat: autoDisconnect["timeFormat"] as? Int ?? 0,
+                onExpire: autoDisconnect["onExpire"] as? Int ?? 1,
+                expiredMessage: autoDisconnect["expiredNotificationMessage"] as? String ?? "Free time expired - VPN disconnected",
+                groupIdentifier: providerConfig?["groupIdentifier"] as? String
+            )
+        }
+    }
+    
+    // MARK: - Properties
+    
+    private var timer: DispatchSourceTimer?
+    private var remainingSeconds: Int = -1
+    private var config: Config?
+    private weak var tunnelProvider: NEPacketTunnelProvider?
+    
+    private static let expiredFlagKey = "flutter_v2ray_auto_disconnect_expired"
+    
+    var isEnabled: Bool { config != nil && remainingSeconds > 0 }
+    
+    // MARK: - Lifecycle
+    
+    func start(config: Config, tunnelProvider: NEPacketTunnelProvider) {
+        self.config = config
+        self.tunnelProvider = tunnelProvider
+        self.remainingSeconds = config.duration
+        
+        os_log("AutoDisconnect: Starting with %d seconds", type: .info, config.duration)
+        
+        timer?.cancel()
+        timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+        timer?.schedule(deadline: .now() + 1, repeating: 1)
+        timer?.setEventHandler { [weak self] in
+            self?.tick()
+        }
+        timer?.resume()
+    }
+    
+    func stop() {
+        timer?.cancel()
+        timer = nil
+        remainingSeconds = -1
+        config = nil
+        os_log("AutoDisconnect: Stopped", type: .info)
+    }
+    
+    // MARK: - Timer
+    
+    private func tick() {
+        guard remainingSeconds > 0 else { return }
+        
+        remainingSeconds -= 1
+        
+        if remainingSeconds <= 0 {
+            handleExpiry()
+        }
+    }
+    
+    private func handleExpiry() {
+        os_log("AutoDisconnect: Time expired", type: .info)
+        
+        // Save flag to shared UserDefaults
+        saveExpiredFlag()
+        
+        // Show notification if configured
+        if config?.onExpire == 1 {
+            showExpiryNotification()
+        }
+        
+        // Stop timer
+        stop()
+        
+        // Stop tunnel
+        tunnelProvider?.cancelTunnelWithError(nil)
+    }
+    
+    // MARK: - Public Methods
+    
+    func updateTime(additionalSeconds: Int) -> Int {
+        guard isEnabled else { return -1 }
+        
+        remainingSeconds += additionalSeconds
+        if remainingSeconds < 0 { remainingSeconds = 0 }
+        
+        os_log("AutoDisconnect: Time updated, %d seconds remaining", type: .info, remainingSeconds)
+        return remainingSeconds
+    }
+    
+    func getRemainingTime() -> Int {
+        return isEnabled ? remainingSeconds : -1
+    }
+    
+    func cancel() {
+        stop()
+        os_log("AutoDisconnect: Cancelled by user", type: .info)
+    }
+    
+    // MARK: - Persistence
+    
+    private func saveExpiredFlag() {
+        if let groupId = config?.groupIdentifier {
+            // Use shared UserDefaults for App Group
+            let sharedDefaults = UserDefaults(suiteName: groupId)
+            sharedDefaults?.set(true, forKey: Self.expiredFlagKey)
+            sharedDefaults?.synchronize()
+            os_log("AutoDisconnect: Expired flag saved to shared UserDefaults (group: %{public}@)", type: .info, groupId)
+        } else {
+            // Fallback to standard UserDefaults
+            UserDefaults.standard.set(true, forKey: Self.expiredFlagKey)
+            os_log("AutoDisconnect: Expired flag saved to standard UserDefaults", type: .info)
+        }
+    }
+    
+    static func wasAutoDisconnected(groupIdentifier: String?) -> Bool {
+        if let groupId = groupIdentifier {
+            return UserDefaults(suiteName: groupId)?.bool(forKey: expiredFlagKey) ?? false
+        }
+        return UserDefaults.standard.bool(forKey: expiredFlagKey)
+    }
+    
+    static func clearExpiredFlag(groupIdentifier: String?) {
+        if let groupId = groupIdentifier {
+            let sharedDefaults = UserDefaults(suiteName: groupId)
+            sharedDefaults?.set(false, forKey: expiredFlagKey)
+            sharedDefaults?.synchronize()
+        } else {
+            UserDefaults.standard.set(false, forKey: expiredFlagKey)
+        }
+    }
+    
+    // MARK: - Notification
+    
+    private func showExpiryNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "VPN"
+        content.body = config?.expiredMessage ?? "Free time expired - VPN disconnected"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(identifier: "auto_disconnect_expiry", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                os_log("AutoDisconnect: Failed to show notification: %{public}@", type: .error, error.localizedDescription)
+            }
+        }
+    }
+}
+
+// MARK: - Packet Tunnel Provider
+
 /// Packet Tunnel Provider for XRay VPN
 class PacketTunnelProvider: NEPacketTunnelProvider {
     
     // MARK: - Properties
     
     private let logger = CustomXRayLogger()
+    private let autoDisconnectManager = AutoDisconnectManager()
+    private var groupIdentifier: String?
     private static let defaultDNSServers = ["8.8.8.8", "114.114.114.114"]
     
     // MARK: - Lifecycle Methods
@@ -32,6 +209,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let config = try extractConfiguration()
             let port = try extractTunnelPort(from: config.xrayConfig)
             let settings = createNetworkSettings(dnsServers: config.dnsServers)
+            
+            // Store group identifier for auto-disconnect
+            self.groupIdentifier = config.groupIdentifier
             
             // CRITICAL: Must set network settings BEFORE starting Xray and tun2socks
             // Otherwise traffic is intercepted but not properly routed
@@ -53,6 +233,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // Small delay to ensure Xray SOCKS server is ready
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     self.startSocks5Tunnel(serverPort: port)
+                    
+                    // Start auto-disconnect timer if configured
+                    if let autoConfig = config.autoDisconnectConfig {
+                        self.autoDisconnectManager.start(config: autoConfig, tunnelProvider: self)
+                    }
+                    
                     os_log("Tunnel started successfully", type: .info)
                     completionHandler(nil)
                 }
@@ -64,6 +250,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
     
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        autoDisconnectManager.stop()
         stopXRay()
         Socks5Tunnel.quit()
         completionHandler()
@@ -80,6 +267,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             handleTrafficRequest(completionHandler)
         case let msg where msg.hasPrefix("xray_delay"):
             handleDelayRequest(message: msg, completionHandler)
+        // Auto-disconnect messages
+        case "auto_disconnect_remaining":
+            let remaining = autoDisconnectManager.getRemainingTime()
+            completionHandler?("\(remaining)".data(using: .utf8))
+        case "auto_disconnect_cancel":
+            autoDisconnectManager.cancel()
+            completionHandler?("ok".data(using: .utf8))
+        case let msg where msg.hasPrefix("auto_disconnect_update:"):
+            let secondsStr = String(msg.dropFirst("auto_disconnect_update:".count))
+            if let seconds = Int(secondsStr) {
+                let remaining = autoDisconnectManager.updateTime(additionalSeconds: seconds)
+                completionHandler?("\(remaining)".data(using: .utf8))
+            } else {
+                completionHandler?("-1".data(using: .utf8))
+            }
         default:
             completionHandler?(messageData)
         }
@@ -95,7 +297,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     
     // MARK: - Configuration Methods
     
-    private func extractConfiguration() throws -> (xrayConfig: Data, dnsServers: [String]) {
+    private func extractConfiguration() throws -> (xrayConfig: Data, dnsServers: [String], groupIdentifier: String?, autoDisconnectConfig: AutoDisconnectManager.Config?) {
         guard let protocolConfig = protocolConfiguration as? NETunnelProviderProtocol,
               let providerConfig = protocolConfig.providerConfiguration else {
             throw TunnelError.invalidConfiguration
@@ -115,7 +317,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             NSLog("XRay: Using custom DNS servers: \(dnsServers)")
         }
         
-        return (xrayConfig, dnsServers)
+        // Get group identifier
+        let groupIdentifier = providerConfig["groupIdentifier"] as? String
+        
+        // Get auto-disconnect config
+        let autoDisconnectConfig = AutoDisconnectManager.Config.from(providerConfig: providerConfig)
+        
+        return (xrayConfig, dnsServers, groupIdentifier, autoDisconnectConfig)
     }
     
     private func createNetworkSettings(dnsServers: [String]) -> NEPacketTunnelNetworkSettings {
@@ -231,3 +439,4 @@ final class CustomXRayLogger: NSObject, XRayLoggerProtocol {
         os_log("XRay: %{public}@", type: .debug, message)
     }
 }
+

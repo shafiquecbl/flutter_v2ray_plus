@@ -26,7 +26,7 @@ object AppConfigs {
      * Connection states for the Xray Core.
      */
     enum class V2RAY_STATES : Serializable {
-        V2RAY_CONNECTED, V2RAY_DISCONNECTED, V2RAY_CONNECTING
+        V2RAY_CONNECTED, V2RAY_DISCONNECTED, V2RAY_CONNECTING, V2RAY_AUTO_DISCONNECTED
     }
 
     /**

@@ -1,18 +1,7 @@
 MIT License
 
-================================================================================
-ORIGINAL WORK:
-Copyright (c) 2024 XIIIFOX (flutter_vless)
-https://github.com/XIIIFOX/flutter_vless
-
-MODIFICATIONS AND ADDITIONS:
-Copyright (c) 2025 Shafique (flutter_v2ray_plus)
+Copyright (c) 2025 Muhammad Shafique
 https://github.com/shafiquecbl/flutter_v2ray_plus
-================================================================================
-
-This package is based on and derived from flutter_vless by XIIIFOX.
-Modifications include iOS framework distribution automation, DNS configuration,
-bug fixes, and additional features.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,3 +20,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+THIRD-PARTY COMPONENTS:
+
+This package uses the following third-party components:
+
+* XRay.xcframework - Xray core binary for iOS
+* jniLibs - Xray core binaries for Android
+
+These components are subject to their own licenses.
+================================================================================

@@ -70,5 +70,23 @@ data class XrayConfig(
     var ROUTING_DOMAIN_STRATEGY: String = "",
     
     /** Custom DNS servers for VPN (nullable, defaults to ["8.8.8.8", "1.1.1.1"] if null). */
-    var DNS_SERVERS: ArrayList<String>? = null
+    var DNS_SERVERS: ArrayList<String>? = null,
+    
+    // Auto-disconnect configuration
+    
+    /** Duration in seconds after which VPN will automatically disconnect. 0 means disabled. */
+    var AUTO_DISCONNECT_DURATION: Int = 0,
+    
+    /** Whether to show remaining time in notification. */
+    var AUTO_DISCONNECT_SHOW_IN_NOTIFICATION: Boolean = true,
+    
+    /** Time format: 0 = withSeconds ("1h 30m 10s"), 1 = withoutSeconds ("1h 30m"). */
+    var AUTO_DISCONNECT_TIME_FORMAT: Int = 0,
+    
+    /** On expire behavior: 0 = disconnectSilently, 1 = disconnectWithNotification. */
+    var AUTO_DISCONNECT_ON_EXPIRE: Int = 1,
+    
+    /** Custom message to show when auto-disconnect triggers. */
+    var AUTO_DISCONNECT_EXPIRED_MESSAGE: String = "Free time expired - VPN disconnected"
 ) : Serializable
+

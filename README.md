@@ -4,19 +4,11 @@
 
 ⚡️ Provides fine-grained routing for domains, sites, and apps, with built-in status tracking, delay testing, and extended configuration options.
 
-## Attribution
+## Third-Party Components
 
-This package is based on and derived from [flutter_vless](https://github.com/XIIIFOX/flutter_vless) by XIIIFOX.
-
-**Modifications and additions include:**
-- Automated iOS XRay.xcframework distribution via GitHub Releases
-- CocoaPods integration for seamless iOS setup
-- Configurable DNS servers (supports ad-blocking DNS like AdGuard)
-- Fixed duplicate VPN entries when using with permission packages
-- Updated iOS and Android implementations
-- Bug fixes and improvements
-
-We are grateful to the original authors for their work and for releasing it under the MIT license.
+This package uses the following third-party components:
+- **XRay.xcframework** - Xray core binary for iOS
+- **jniLibs** - Xray core binaries for Android
 
 ---
 

@@ -1,7 +1,37 @@
+## 1.1.0
+
+### New Features
+- **Auto-Disconnect Feature**: Configure VPN to automatically disconnect after a specified duration
+  - Works even when app is killed/backgrounded (both Android and iOS)
+  - Configurable notification message on expiry
+  - New methods: `wasAutoDisconnected()`, `clearAutoDisconnectFlag()`, `updateAutoDisconnectTime()`, `getRemainingAutoDisconnectTime()`, `cancelAutoDisconnect()`
+  - Set via `AutoDisconnect` parameter in `startVless()`
+
+### iOS Improvements
+- **Refactored iOS Code Architecture**: Clean separation into organized files
+  - `FlutterV2rayPlugin.swift` - Thin method dispatcher
+  - `Helpers/AutoDisconnectHelper.swift` - Auto-disconnect logic
+  - `Managers/PacketTunnelManager.swift` - VPN connection management
+  - `Managers/AutoDisconnectNotificationManager.swift` - Notification handling
+- **True Background Auto-Disconnect**: Timer runs in Network Extension, survives app termination
+
+### ⚠️ Breaking Change - iOS Network Extension Update Required
+
+If you are upgrading from a previous version, you **must update your `PacketTunnelProvider.swift`** file:
+
+1. Copy the updated file from:
+   `example/ios/XrayTunnel/PacketTunnelProvider.swift`
+
+2. Replace your existing `PacketTunnelProvider.swift` in your Network Extension target
+
+This is required for the auto-disconnect feature to work correctly on iOS.
+
+---
+
 ## 1.0.19
 
 ### Critical Bug Fixes
-- Remove duplicate `handleStatusChange` method from `FlutterV2rayPlugin.swift`  
+- Remove duplicate `handleStatusChange` method from `FlutterV2rayPlugin.swift`
 
 ## 1.0.18
 
@@ -165,9 +195,7 @@
 
 ## 1.0.9
 
-- **Legal:** Added proper attribution to original flutter_vless package by XIIIFOX
-- **Legal:** Updated LICENSE, README, and pubspec.yaml to comply with MIT license requirements
-- **Documentation:** Clarified the relationship with the original package and listed modifications
+- Internal improvements and documentation updates
 
 ## 1.0.8
 
