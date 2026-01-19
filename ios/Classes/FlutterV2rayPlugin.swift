@@ -252,6 +252,12 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         let manager = PacketTunnelManager(providerBundleIdentifier: "\(providerBundleIdentifier).XrayTunnel", groupIdentifier: groupIdentifier, appName: appName)
         self.packetTunnelManager = manager
         
+        // Configure AutoDisconnectHelper with groupIdentifier so wasAutoDisconnected works
+        AutoDisconnectHelper.shared.configure(
+            groupIdentifier: groupIdentifier,
+            appName: appName
+        )
+        
         // Setup status observer
         self.statusCancellable?.cancel()
         self.statusCancellable = manager.objectWillChange

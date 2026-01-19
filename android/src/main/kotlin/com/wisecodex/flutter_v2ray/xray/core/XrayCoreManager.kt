@@ -497,11 +497,12 @@ object XrayCoreManager {
         val config = AppConfigs.V2RAY_CONFIG
         
         // Save flag to SharedPreferences so app can check on startup
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        @Suppress("DEPRECATION")
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
             .edit()
             .putBoolean(KEY_AUTO_DISCONNECT_EXPIRED, true)
-            .apply()
-        Log.d(TAG, "Auto-disconnect expired flag saved to SharedPreferences")
+            .commit() // Use commit() to ensure write to disk before service stops
+        Log.d(TAG, "Auto-disconnect expired flag saved to SharedPreferences (Synced)")
         
         // Send AUTO_DISCONNECTED state broadcast
         Intent(AppConfigs.V2RAY_CONNECTION_INFO).apply {
@@ -848,8 +849,11 @@ object XrayCoreManager {
      * @return true if auto-disconnect expired, false otherwise
      */
     fun wasAutoDisconnected(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        @Suppress("DEPRECATION")
+        val result = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
             .getBoolean(KEY_AUTO_DISCONNECT_EXPIRED, false)
+        Log.d(TAG, "wasAutoDisconnected check: $result")
+        return result
     }
     
     /**
@@ -857,9 +861,10 @@ object XrayCoreManager {
      * Should be called after app has handled the expired state.
      */
     fun clearAutoDisconnectFlag(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        @Suppress("DEPRECATION")
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
             .edit()
             .putBoolean(KEY_AUTO_DISCONNECT_EXPIRED, false)
-            .apply()
+            .commit()
     }
 }

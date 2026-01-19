@@ -1,3 +1,8 @@
+## 1.1.2
+- Fix Android: `wasAutoDisconnected()` returning false after app kill (persistence race condition).
+- Fix iOS: `wasAutoDisconnected()` returning false after app restart due to initialization order.
+- Android: Enhanced SharedPreferences reliability across processes using `MODE_MULTI_PROCESS`.
+
 ## 1.1.1
 - Fix Android: Auto-disconnect time update failing due to process isolation.
 - Fix Android: Notification displaying default "Flutter Vless" instead of Application Name.
