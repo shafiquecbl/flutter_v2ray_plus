@@ -100,6 +100,7 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
             "cancelAutoDisconnect" -> handleCancelAutoDisconnect(result)
             "wasAutoDisconnected" -> handleWasAutoDisconnected(result)
             "clearAutoDisconnectFlag" -> handleClearAutoDisconnectFlag(result)
+            "getAutoDisconnectTimestamp" -> handleGetAutoDisconnectTimestamp(result)
             else -> result.notImplemented()
         }
     }
@@ -317,6 +318,11 @@ class FlutterV2rayPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
     private fun handleClearAutoDisconnectFlag(result: MethodChannel.Result) {
         context?.let { XrayCoreManager.clearAutoDisconnectFlag(it) }
         result.success(null)
+    }
+
+    private fun handleGetAutoDisconnectTimestamp(result: MethodChannel.Result) {
+        val timestamp = context?.let { XrayCoreManager.getAutoDisconnectTimestamp(it) } ?: 0L
+        result.success(timestamp)
     }
 
     // MARK: - Broadcast Receiver

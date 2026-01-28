@@ -129,6 +129,8 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             wasAutoDisconnected(result: result)
         case "clearAutoDisconnectFlag":
             clearAutoDisconnectFlag(result: result)
+        case "getAutoDisconnectTimestamp":
+            getAutoDisconnectTimestamp(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -333,6 +335,10 @@ public class FlutterV2rayPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private func clearAutoDisconnectFlag(result: @escaping FlutterResult) {
         AutoDisconnectHelper.shared.handleClearFlag(result: result)
+    }
+    
+    private func getAutoDisconnectTimestamp(result: @escaping FlutterResult) {
+        AutoDisconnectHelper.shared.handleGetTimestamp(result: result)
     }
 }
 

@@ -496,13 +496,13 @@ object XrayCoreManager {
         
         val config = AppConfigs.V2RAY_CONFIG
         
-        // Save flag to SharedPreferences so app can check on startup
+        // Save timestamp to SharedPreferences so app can check on startup
         @Suppress("DEPRECATION")
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
             .edit()
-            .putBoolean(KEY_AUTO_DISCONNECT_EXPIRED, true)
+            .putLong(KEY_AUTO_DISCONNECT_TIMESTAMP, System.currentTimeMillis())
             .commit() // Use commit() to ensure write to disk before service stops
-        Log.d(TAG, "Auto-disconnect expired flag saved to SharedPreferences (Synced)")
+        Log.d(TAG, "Auto-disconnect timestamp saved to SharedPreferences (Synced)")
         
         // Send AUTO_DISCONNECTED state broadcast
         Intent(AppConfigs.V2RAY_CONNECTION_INFO).apply {
@@ -840,9 +840,9 @@ object XrayCoreManager {
     private const val CONNECTION_TIMEOUT_MS = 5000
     private const val READ_TIMEOUT_MS = 5000
     
-    // SharedPreferences for auto-disconnect flag
+    // SharedPreferences for auto-disconnect timestamp
     private const val PREFS_NAME = "flutter_v2ray_prefs"
-    private const val KEY_AUTO_DISCONNECT_EXPIRED = "auto_disconnect_expired"
+    private const val KEY_AUTO_DISCONNECT_TIMESTAMP = "auto_disconnect_timestamp"
     
     /**
      * Checks if VPN was auto-disconnected while app was killed.
@@ -850,10 +850,23 @@ object XrayCoreManager {
      */
     fun wasAutoDisconnected(context: Context): Boolean {
         @Suppress("DEPRECATION")
-        val result = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
-            .getBoolean(KEY_AUTO_DISCONNECT_EXPIRED, false)
-        Log.d(TAG, "wasAutoDisconnected check: $result")
+        val timestamp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
+            .getLong(KEY_AUTO_DISCONNECT_TIMESTAMP, 0L)
+        val result = timestamp > 0
+        Log.d(TAG, "wasAutoDisconnected check: $result (timestamp: $timestamp)")
         return result
+    }
+    
+    /**
+     * Gets the timestamp when VPN was auto-disconnected.
+     * @return timestamp in milliseconds since epoch, or 0 if not auto-disconnected
+     */
+    fun getAutoDisconnectTimestamp(context: Context): Long {
+        @Suppress("DEPRECATION")
+        val timestamp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
+            .getLong(KEY_AUTO_DISCONNECT_TIMESTAMP, 0L)
+        Log.d(TAG, "getAutoDisconnectTimestamp: $timestamp")
+        return timestamp
     }
     
     /**
@@ -864,7 +877,7 @@ object XrayCoreManager {
         @Suppress("DEPRECATION")
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
             .edit()
-            .putBoolean(KEY_AUTO_DISCONNECT_EXPIRED, false)
+            .remove(KEY_AUTO_DISCONNECT_TIMESTAMP)
             .commit()
     }
 }

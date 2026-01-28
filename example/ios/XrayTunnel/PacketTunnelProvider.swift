@@ -59,7 +59,7 @@ final class AutoDisconnectManager {
     private var config: Config?
     private weak var tunnelProvider: NEPacketTunnelProvider?
     
-    private static let expiredFlagKey = "flutter_v2ray_auto_disconnect_expired"
+    private static let timestampKey = "flutter_v2ray_auto_disconnect_timestamp"
     
     var isEnabled: Bool { config != nil && remainingSeconds > 0 }
     
@@ -143,33 +143,41 @@ final class AutoDisconnectManager {
     // MARK: - Persistence
     
     private func saveExpiredFlag() {
+        let timestamp = Date().timeIntervalSince1970 * 1000 // milliseconds for cross-platform consistency
         if let groupId = config?.groupIdentifier {
             // Use shared UserDefaults for App Group
             let sharedDefaults = UserDefaults(suiteName: groupId)
-            sharedDefaults?.set(true, forKey: Self.expiredFlagKey)
+            sharedDefaults?.set(timestamp, forKey: Self.timestampKey)
             sharedDefaults?.synchronize()
-            os_log("AutoDisconnect: Expired flag saved to shared UserDefaults (group: %{public}@)", type: .info, groupId)
+            os_log("AutoDisconnect: Timestamp saved to shared UserDefaults (group: %{public}@)", type: .info, groupId)
         } else {
             // Fallback to standard UserDefaults
-            UserDefaults.standard.set(true, forKey: Self.expiredFlagKey)
-            os_log("AutoDisconnect: Expired flag saved to standard UserDefaults", type: .info)
+            UserDefaults.standard.set(timestamp, forKey: Self.timestampKey)
+            os_log("AutoDisconnect: Timestamp saved to standard UserDefaults", type: .info)
         }
     }
     
     static func wasAutoDisconnected(groupIdentifier: String?) -> Bool {
         if let groupId = groupIdentifier {
-            return UserDefaults(suiteName: groupId)?.bool(forKey: expiredFlagKey) ?? false
+            return (UserDefaults(suiteName: groupId)?.double(forKey: timestampKey) ?? 0) > 0
         }
-        return UserDefaults.standard.bool(forKey: expiredFlagKey)
+        return UserDefaults.standard.double(forKey: timestampKey) > 0
+    }
+    
+    static func getAutoDisconnectTimestamp(groupIdentifier: String?) -> Int64 {
+        if let groupId = groupIdentifier {
+            return Int64(UserDefaults(suiteName: groupId)?.double(forKey: timestampKey) ?? 0)
+        }
+        return Int64(UserDefaults.standard.double(forKey: timestampKey))
     }
     
     static func clearExpiredFlag(groupIdentifier: String?) {
         if let groupId = groupIdentifier {
             let sharedDefaults = UserDefaults(suiteName: groupId)
-            sharedDefaults?.set(false, forKey: expiredFlagKey)
+            sharedDefaults?.removeObject(forKey: timestampKey)
             sharedDefaults?.synchronize()
         } else {
-            UserDefaults.standard.set(false, forKey: expiredFlagKey)
+            UserDefaults.standard.removeObject(forKey: timestampKey)
         }
     }
     

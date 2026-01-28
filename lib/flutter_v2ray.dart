@@ -223,6 +223,22 @@ class FlutterV2ray {
     await FlutterV2rayPlatform.instance.clearAutoDisconnectFlag();
   }
 
+  /// Gets the timestamp (milliseconds since epoch) when VPN was auto-disconnected.
+  ///
+  /// Returns 0 if VPN was not auto-disconnected.
+  ///
+  /// Use this to calculate actual connection duration:
+  /// ```dart
+  /// final timestamp = await flutterV2ray.getAutoDisconnectTimestamp();
+  /// if (timestamp > 0) {
+  ///   final disconnectTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+  ///   // Calculate duration from connection start to disconnectTime
+  /// }
+  /// ```
+  Future<int> getAutoDisconnectTimestamp() async {
+    return await FlutterV2rayPlatform.instance.getAutoDisconnectTimestamp();
+  }
+
   /// parse FlutterVlessURL object from Vless share link
   ///
   /// like vmess://, vless://, trojan://, ss://, socks://

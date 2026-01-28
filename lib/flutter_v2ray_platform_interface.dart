@@ -115,6 +115,13 @@ abstract class FlutterV2rayPlatform extends PlatformInterface {
     );
   }
 
+  /// Gets the timestamp (milliseconds since epoch) when VPN was auto-disconnected.
+  ///
+  /// Returns 0 if VPN was not auto-disconnected.
+  Future<int> getAutoDisconnectTimestamp() {
+    throw UnimplementedError('getAutoDisconnectTimestamp() has not been implemented.');
+  }
+
   Stream<VlessStatus> get onStatusChanged {
     throw UnimplementedError('onStatusChanged() has not been implemented.');
   }

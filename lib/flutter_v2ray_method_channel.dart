@@ -115,6 +115,12 @@ class MethodChannelFlutterV2ray extends FlutterV2rayPlatform {
   }
 
   @override
+  Future<int> getAutoDisconnectTimestamp() async {
+    final timestamp = await methodChannel.invokeMethod<int>('getAutoDisconnectTimestamp');
+    return timestamp ?? 0;
+  }
+
+  @override
   Stream<VlessStatus> get onStatusChanged {
     return eventChannel.receiveBroadcastStream().map(
       (event) => VlessStatus(

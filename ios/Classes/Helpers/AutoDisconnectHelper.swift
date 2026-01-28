@@ -26,8 +26,8 @@ final class AutoDisconnectHelper {
     /// App name for notifications
     private var appName: String = "VPN"
     
-    /// UserDefaults key for auto-disconnect expired flag
-    private static let expiredFlagKey = "flutter_v2ray_auto_disconnect_expired"
+    /// UserDefaults key for auto-disconnect timestamp
+    private static let timestampKey = "flutter_v2ray_auto_disconnect_timestamp"
     
     // MARK: - Configuration
     
@@ -54,14 +54,20 @@ final class AutoDisconnectHelper {
     /// Check if VPN was auto-disconnected while app was killed/backgrounded
     /// - Returns: true if auto-disconnect expired, false otherwise
     func wasAutoDisconnected() -> Bool {
-        return getUserDefaults().bool(forKey: Self.expiredFlagKey)
+        return getUserDefaults().double(forKey: Self.timestampKey) > 0
+    }
+    
+    /// Get the timestamp when VPN was auto-disconnected
+    /// - Returns: timestamp in milliseconds since epoch, or 0 if not auto-disconnected
+    func getAutoDisconnectTimestamp() -> Int64 {
+        return Int64(getUserDefaults().double(forKey: Self.timestampKey))
     }
     
     /// Clear the auto-disconnect expired flag
     /// Should be called after the app has handled the expired state
     func clearExpiredFlag() {
         let defaults = getUserDefaults()
-        defaults.set(false, forKey: Self.expiredFlagKey)
+        defaults.removeObject(forKey: Self.timestampKey)
         defaults.synchronize()
     }
     
@@ -158,6 +164,12 @@ final class AutoDisconnectHelper {
     func handleClearFlag(result: @escaping FlutterResult) {
         clearExpiredFlag()
         result(nil)
+    }
+    
+    /// Handle getAutoDisconnectTimestamp method call
+    /// - Parameter result: Flutter result callback
+    func handleGetTimestamp(result: @escaping FlutterResult) {
+        result(getAutoDisconnectTimestamp())
     }
     
     // MARK: - Private Methods

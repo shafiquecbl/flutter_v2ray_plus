@@ -1,3 +1,8 @@
+## 1.1.3
+- **Enhancement**: Replace auto-disconnect boolean flag with timestamp for accurate duration tracking.
+- Add `getAutoDisconnectTimestamp()` method to retrieve exact disconnection time (milliseconds since epoch).
+- Fix duration calculation when app reopens after auto-disconnect (now shows actual connection time, not time since app opened).
+
 ## 1.1.2
 - Fix Android: `wasAutoDisconnected()` returning false after app kill (persistence race condition).
 - Fix iOS: `wasAutoDisconnected()` returning false after app restart due to initialization order.
